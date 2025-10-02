@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage Users - {{ company.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="fas fa-users-cog me-2"></i>Manage Users
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('company.add_user') }}" class="btn btn-primary me-2">
+            <i class="fas fa-user-plus me-2"></i>Add User
+        </a>
+        {% endif %}
+        <a href="{{ url_for('company.index') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back
+        </a>
+    </div>
+</div>
+
+<!-- Users Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Last Login</th>
+                        <th>Created</th>
+                        {% if current_user.is_admin() %}
+                        <th>Actions</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>
+                            {{ user.full_name }}
+                            {% if user.id == current_user.id %}
+                            <span class="badge bg-info">You</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ user.email }}</td>
+                        <td>
+                            <span class="badge bg-{{ 'primary' if user.role.value == 'admin' else 'success' if user.role.value == 'manager' else 'info' if user.role.value == 'analyst' else 'secondary' }}">
+                                {{ user.role.value|upper }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if user.is_active %}
+                            <span class="badge bg-success">Active</span>
+                            {% else %}
+                            <span class="badge bg-danger">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ user.last_login|datetime if user.last_login else 'Never' }}</td>
+                        <td>{{ user.created_at|date }}</td>
+                        {% if current_user.is_admin() %}
+                        <td>
+                            {% if user.id != current_user.id %}
+                            <form method="POST" action="{{ url_for('company.toggle_user_active', user_id=user.id) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-{{ 'danger' if user.is_active else 'success' }}" onclick="return confirm('Are you sure?')">
+                                    <i class="fas fa-{{ 'ban' if user.is_active else 'check' }} me-1"></i>
+                                    {{ 'Deactivate' if user.is_active else 'Activate' }}
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

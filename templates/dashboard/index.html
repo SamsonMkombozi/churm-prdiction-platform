@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Churn Prediction Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #4e73df;
+            --success-color: #1cc88a;
+            --warning-color: #f6c23e;
+            --danger-color: #e74a3b;
+            --info-color: #36b9cc;
+        }
+
+        body {
+            background-color: #f8f9fc;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .navbar {
+            background: linear-gradient(135deg, var(--primary-color), #224abe);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .sidebar {
+            min-height: 100vh;
+            background: #fff;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+        }
+
+        .sidebar .nav-link {
+            color: #5a5c69;
+            padding: 1rem 1.5rem;
+            border-left: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .sidebar .nav-link:hover {
+            background-color: #f8f9fc;
+            border-left-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .sidebar .nav-link.active {
+            background-color: #eaecf4;
+            border-left-color: var(--primary-color);
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        .stat-card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 0.5rem 2rem 0 rgba(58, 59, 69, 0.25);
+        }
+
+        .stat-card .card-body {
+            padding: 1.5rem;
+        }
+
+        .stat-icon {
+            font-size: 2rem;
+            opacity: 0.3;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0.5rem 0;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .action-card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+            transition: transform 0.3s;
+        }
+
+        .action-card:hover {
+            transform: translateY(-3px);
+        }
+
+        .btn-action {
+            padding: 1rem 2rem;
+            font-weight: 600;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .chart-card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+        }
+
+        .badge-pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .progress-thin {
+            height: 8px;
+            border-radius: 4px;
+        }
+
+        .company-logo {
+            width: 50px;
+            height: 50px;
+            border-radius: 10px;
+            object-fit: cover;
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="#">
+                <i class="fas fa-chart-line me-2"></i>ChurnPredict Pro
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#"><i class="fas fa-bell me-1"></i> <span class="badge bg-danger badge-pulse">3</span></a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-circle me-1"></i> Admin User
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i>Profile</a></li>
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>Settings</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-2 d-md-block sidebar">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="#">
+                                <i class="fas fa-tachometer-alt me-2"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#">
+                                <i class="fas fa-building me-2"></i> Companies
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#">
+                                <i class="fas fa-users me-2"></i> Customers
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#">
+                                <i class="fas fa-brain me-2"></i> Predictions
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#">
+                                <i class="fas fa-chart-bar me-2"></i> Analytics
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#">
+                                <i class="fas fa-cog me-2"></i> Settings
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main Content -->
+            <main class="col-md-10 ms-sm-auto px-md-4">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2"><i class="fas fa-tachometer-alt me-2"></i>Dashboard Overview</h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        <div class="btn-group me-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary">
+                                <i class="fas fa-download me-1"></i>Export
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary">
+                                <i class="fas fa-sync me-1"></i>Refresh
+                            </button>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-primary">
+                            <i class="fas fa-calendar me-1"></i>This Month
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Statistics Cards -->
+                <div class="row mb-4">
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="stat-card card border-left-primary">
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col">
+                                        <div class="stat-label text-primary">Total Customers</div>
+                                        <div class="stat-value text-dark">1,247</div>
+                                        <div class="text-success small">
+                                            <i class="fas fa-arrow-up me-1"></i>12% from last month
+                                        </div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-users stat-icon text-primary"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="stat-card card border-left-danger">
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col">
+                                        <div class="stat-label text-danger">High Risk</div>
+                                        <div class="stat-value text-dark">89</div>
+                                        <div class="text-danger small">
+                                            <i class="fas fa-exclamation-triangle me-1"></i>Needs attention
+                                        </div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-exclamation-circle stat-icon text-danger"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="stat-card card border-left-warning">
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col">
+                                        <div class="stat-label text-warning">Medium Risk</div>
+                                        <div class="stat-value text-dark">234</div>
+                                        <div class="text-warning small">
+                                            <i class="fas fa-eye me-1"></i>Monitor closely
+                                        </div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-chart-line stat-icon text-warning"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="stat-card card border-left-success">
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col">
+                                        <div class="stat-label text-success">Low Risk</div>
+                                        <div class="stat-value text-dark">924</div>
+                                        <div class="text-success small">
+                                            <i class="fas fa-check-circle me-1"></i>Healthy status
+                                        </div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-shield-alt stat-icon text-success"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Company Section -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card action-card">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0"><i class="fas fa-building me-2"></i>Active Company: Habari Company</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col-md-2 text-center">
+                                        <img src="https://via.placeholder.com/100/4e73df/ffffff?text=HC" alt="Habari Logo" class="company-logo mb-2">
+                                        <h6 class="mb-0">Habari Company</h6>
+                                        <small class="text-muted">ISP Provider</small>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <h6 class="text-muted mb-2">Connection Status</h6>
+                                        <div class="d-flex align-items-center mb-2">
+                                            <span class="badge bg-success me-2">Connected</span>
+                                            <small class="text-muted">Last sync: 5 minutes ago</small>
+                                        </div>
+                                        <p class="mb-0 small">
+                                            <strong>CRM Endpoint:</strong><br>
+                                            <code class="small">palegreen-porpoise-596991.hostingersite.com</code>
+                                        </p>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <h6 class="text-muted mb-2">Data Summary</h6>
+                                        <ul class="list-unstyled mb-0 small">
+                                            <li><i class="fas fa-database text-primary me-2"></i>Customers: <strong>1,247</strong></li>
+                                            <li><i class="fas fa-ticket-alt text-info me-2"></i>Tickets: <strong>3,456</strong></li>
+                                            <li><i class="fas fa-credit-card text-success me-2"></i>Payments: <strong>8,932</strong></li>
+                                        </ul>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="d-grid gap-2">
+                                            <button class="btn btn-primary btn-sm" onclick="syncData()">
+                                                <i class="fas fa-sync me-2"></i>Sync Now
+                                            </button>
+                                            <button class="btn btn-outline-secondary btn-sm" onclick="viewCompanyDetails()">
+                                                <i class="fas fa-info-circle me-2"></i>View Details
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card action-card">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0"><i class="fas fa-bolt me-2"></i>Quick Actions</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row text-center">
+                                    <div class="col-md-4 mb-3">
+                                        <button class="btn btn-primary btn-action w-100" onclick="syncData()">
+                                            <i class="fas fa-sync-alt fa-2x mb-2 d-block"></i>
+                                            <span>Sync CRM Data</span>
+                                        </button>
+                                        <small class="text-muted d-block mt-2">Pull latest data from Habari CRM</small>
+                                    </div>
+                                    
+                                    <div class="col-md-4 mb-3">
+                                        <button class="btn btn-success btn-action w-100" onclick="runPredictions()">
+                                            <i class="fas fa-magic fa-2x mb-2 d-block"></i>
+                                            <span>Run Predictions</span>
+                                        </button>
+                                        <small class="text-muted d-block mt-2">Generate churn predictions for all customers</small>
+                                    </div>
+                                    
+                                    <div class="col-md-4 mb-3">
+                                        <button class="btn btn-danger btn-action w-100" onclick="viewHighRisk()">
+                                            <i class="fas fa-exclamation-triangle fa-2x mb-2 d-block"></i>
+                                            <span>View High Risk</span>
+                                        </button>
+                                        <small class="text-muted d-block mt-2">See customers at risk of churning</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="row mb-4">
+                    <div class="col-lg-8 mb-4">
+                        <div class="chart-card card">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0"><i class="fas fa-chart-area me-2"></i>Churn Risk Trend</h5>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="churnTrendChart" height="80"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-4 mb-4">
+                        <div class="chart-card card">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Risk Distribution</h5>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="riskDistChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0"><i class="fas fa-history me-2"></i>Recent Activity</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Time</th>
+                                                <th>Activity</th>
+                                                <th>Status</th>
+                                                <th>Details</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td>5 min ago</td>
+                                                <td><i class="fas fa-sync text-primary me-2"></i>Data Sync</td>
+                                                <td><span class="badge bg-success">Completed</span></td>
+                                                <td>1,247 customers synced</td>
+                                            </tr>
+                                            <tr>
+                                                <td>1 hour ago</td>
+                                                <td><i class="fas fa-brain text-info me-2"></i>Prediction Run</td>
+                                                <td><span class="badge bg-success">Completed</span></td>
+                                                <td>89 high-risk customers identified</td>
+                                            </tr>
+                                            <tr>
+                                                <td>2 hours ago</td>
+                                                <td><i class="fas fa-bell text-warning me-2"></i>Alert Sent</td>
+                                                <td><span class="badge bg-warning">Sent</span></td>
+                                                <td>High-risk customer notification</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Getting Started Guide -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card border-info">
+                            <div class="card-header bg-info text-white">
+                                <h5 class="mb-0"><i class="fas fa-rocket me-2"></i>Getting Started Guide</h5>
+                            </div>
+                            <div class="card-body">
+                                <ol class="mb-0">
+                                    <li class="mb-2">
+                                        <strong>Sync your CRM data</strong> - Connect to Habari CRM and pull customer, ticket, and payment data
+                                        <div class="progress progress-thin mt-2">
+                                            <div class="progress-bar bg-success" style="width: 100%"></div>
+                                        </div>
+                                    </li>
+                                    <li class="mb-2">
+                                        <strong>Run initial predictions</strong> - Generate churn predictions using pre-trained ML models
+                                        <div class="progress progress-thin mt-2">
+                                            <div class="progress-bar bg-warning" style="width: 60%"></div>
+                                        </div>
+                                    </li>
+                                    <li class="mb-2">
+                                        <strong>Review high-risk customers</strong> - Identify and prioritize customers who need attention
+                                        <div class="progress progress-thin mt-2">
+                                            <div class="progress-bar bg-danger" style="width: 30%"></div>
+                                        </div>
+                                    </li>
+                                    <li class="mb-0">
+                                        <strong>Set up automated alerts</strong> - Configure notifications for critical churn events
+                                        <div class="progress progress-thin mt-2">
+                                            <div class="progress-bar" style="width: 0%"></div>
+                                        </div>
+                                    </li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.js"></script>
+    <script>
+        // Churn Trend Chart
+        const trendCtx = document.getElementById('churnTrendChart').getContext('2d');
+        new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                datasets: [{
+                    label: 'High Risk',
+                    data: [65, 72, 81, 89, 87, 89],
+                    borderColor: '#e74a3b',
+                    backgroundColor: 'rgba(231, 74, 59, 0.1)',
+                    tension: 0.4
+                }, {
+                    label: 'Medium Risk',
+                    data: [180, 195, 210, 225, 230, 234],
+                    borderColor: '#f6c23e',
+                    backgroundColor: 'rgba(246, 194, 62, 0.1)',
+                    tension: 0.4
+                }, {
+                    label: 'Low Risk',
+                    data: [820, 850, 880, 900, 915, 924],
+                    borderColor: '#1cc88a',
+                    backgroundColor: 'rgba(28, 200, 138, 0.1)',
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    }
+                }
+            }
+        });
+
+        // Risk Distribution Pie Chart
+        const distCtx = document.getElementById('riskDistChart').getContext('2d');
+        new Chart(distCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Low Risk', 'Medium Risk', 'High Risk'],
+                datasets: [{
+                    data: [924, 234, 89],
+                    backgroundColor: ['#1cc88a', '#f6c23e', '#e74a3b']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+
+        // Action Functions
+        function syncData() {
+            alert('Syncing data from Habari CRM...\n\nThis will:\n1. Fetch latest customers\n2. Pull recent tickets\n3. Update payment records\n\n(Implementation in Phase 3-4)');
+        }
+
+        function runPredictions() {
+            alert('Running ML predictions...\n\nThis will:\n1. Load pre-trained models\n2. Process customer features\n3. Generate churn predictions\n4. Update risk scores\n\n(Implementation in Phase 6)');
+        }
+
+        function viewHighRisk() {
+            alert('Viewing high-risk customers...\n\nThis will show:\n1. Customers with >70% churn probability\n2. Recent activity patterns\n3. Recommended actions\n\n(Implementation in Phase 7)');
+        }
+
+        function viewCompanyDetails() {
+            alert('Company Details:\n\nHabari Company\n- Type: ISP Provider\n- Customers: 1,247\n- Active Since: 2023\n- CRM Integration: Active\n\n(Full details in Phase 5)');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Login - ChurnPredict Pro{% endblock %}
+
+{% block content %}
+<div class="min-vh-100 d-flex align-items-center justify-content-center bg-light">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-5">
+                <div class="card shadow-lg border-0">
+                    <div class="card-body p-5">
+                        <div class="text-center mb-4">
+                            <i class="fas fa-chart-line fa-3x text-primary mb-3"></i>
+                            <h2 class="fw-bold">ChurnPredict Pro</h2>
+                            <p class="text-muted">Sign in to your account</p>
+                        </div>
+
+                        <form method="POST" action="{{ url_for('auth.login') }}">
+                            <div class="mb-3">
+                                <label for="username" class="form-label">Username or Email</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-user"></i></span>
+                                    <input type="text" class="form-control" id="username" name="username" required autofocus>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="password" class="form-label">Password</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                                    <input type="password" class="form-control" id="password" name="password" required>
+                                </div>
+                            </div>
+
+                            <div class="mb-3 form-check">
+                                <input type="checkbox" class="form-check-input" id="remember" name="remember">
+                                <label class="form-check-label" for="remember">Remember me</label>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary w-100 py-2 mb-3">
+                                <i class="fas fa-sign-in-alt me-2"></i>Sign In
+                            </button>
+
+                            <div class="text-center">
+                                <p class="mb-0">Don't have an account? 
+                                    <a href="{{ url_for('auth.register') }}" class="text-primary fw-bold">Sign Up</a>
+                                </p>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+"got this  form this""TemplateNotFound
+jinja2.exceptions.TemplateNotFound: auth/login.html
+
+Traceback (most recent call last)
+File "/var/www/html/churn-prediction-platform/venv/lib/python3.10/site-packages/flask/app.py", line 1536, in __call__
+return self.wsgi_app(environ, start_response)
+File "/var/www/html/churn-prediction-platform/venv/lib/python3.10/site-packages/flask/app.py", line 1514, in wsgi_app
+response = self.handle_exception(e)
+File "/var/www/html/churn-prediction-platform/venv/lib/python3.10/site-packages/flask/app.py", line 1511, in wsgi_app
+response = self.full_dispatch_request()
+File "/var/www/html/churn-prediction-platform/venv/lib/python3.10/site-packages/flask/app.py", line 919, in full_dispatch_request
+rv = self.handle_user_exception(e)
+File "/var/www/html/churn-prediction-platform/venv/lib/python3.10/site-packages/flask/app.py", line 917, in full_dispatch_request
+rv = self.dispatch_request()
+File "/var/www/html/churn-prediction-platform/venv/lib/python3.10/site-packages/flask/app.py", line 902, in dispatch_request
+return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+File "/var/www/html/churn-prediction-platform/app/controllers/auth_controller.py", line 29, in login
+return render_template('auth/login.html')
+File "/var/www/html/churn-prediction-platform/venv/lib/python3.10/site-packages/flask/templating.py", line 149, in render_template
+template = app.jinja_env.get_or_select_template(template_name_or_list)
+File "/var/www/html/churn-prediction-platform/venv/lib/python3.10/site-packages/jinja2/environment.py", line 1087, in get_or_select_template
+return self.get_template(template_name_or_list, parent, globals)
+File "/var/www/html/churn-prediction-platform/venv/lib/python3.10/site-packages/jinja2/environment.py", line 1016, in get_template
+return self._load_template(name, globals)
+File "/var/www/html/churn-prediction-platform/venv/lib/python3.10/site-packages/jinja2/environment.py", line 975, in _load_template
+template = self.loader.load(self, name, self.make_globals(globals))
+File "/var/www/html/churn-prediction-platform/venv/lib/python3.10/site-packages/jinja2/loaders.py", line 126, in load
+source, filename, uptodate = self.get_source(environment, name)
+File "/var/www/html/churn-prediction-platform/venv/lib/python3.10/site-packages/flask/templating.py", line 65, in get_source
+return self._get_source_fast(environment, template)
+File "/var/www/html/churn-prediction-platform/venv/lib/python3.10/site-packages/flask/templating.py", line 99, in _get_source_fast
+raise TemplateNotFound(template)
+jinja2.exceptions.TemplateNotFound: auth/login.html
+The debugger caught an exception in your WSGI application. You can now look at the traceback which led to the error.
+To switch between the interactive traceback and the plaintext one, you can click on the "Traceback" headline. From the text traceback you can also create a paste of it. For code execution mouse-over the frame you want to debug and click on the console icon on the right side.
+
+You can execute arbitrary Python code in the stack frames and there are some extra helpers available for introspection:
+
+dump() shows all variables in the frame
+dump(obj) dumps all that's known about the object"
