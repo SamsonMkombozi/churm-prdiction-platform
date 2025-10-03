@@ -35,6 +35,9 @@ def create_app(config_name='development'):
     # Initialize extensions
     init_extensions(app)
     
+    # Register custom template filters
+    register_template_filters(app)
+    
     # Import models here (after db is initialized)
     with app.app_context():
         from app.models import user, company
@@ -59,6 +62,11 @@ def create_app(config_name='development'):
     register_error_handlers(app)
     
     return app
+
+def register_template_filters(app):
+    """Register custom Jinja2 template filters"""
+    from app.utils.template_filters import register_filters
+    register_filters(app)
 
 def register_blueprints(app):
     """Register all blueprints"""

@@ -3,178 +3,199 @@
 {% block title %}{{ company.name }} - Overview{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">
-        <i class="fas fa-building me-2"></i>{{ company.name }}
-    </h1>
-    <div class="btn-toolbar mb-2 mb-md-0">
-        {% if current_user.is_manager() %}
-        <button type="button" class="btn btn-primary me-2" id="syncButton">
-            <i class="fas fa-sync-alt me-2"></i>Sync CRM Data
-        </button>
-        <a href="{{ url_for('company.settings') }}" class="btn btn-outline-secondary">
-            <i class="fas fa-cog me-2"></i>Settings
-        </a>
-        {% endif %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+        <h1 class="h2">
+            <i class="fas fa-building me-2"></i>{{ company.name }}
+        </h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            {% if current_user.is_manager() %}
+            <button type="button" class="btn btn-primary me-2" id="syncButton" disabled title="Phase 4 Feature">
+                <i class="fas fa-sync-alt me-2"></i>Sync CRM Data
+            </button>
+            <a href="{{ url_for('company.settings') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-cog me-2"></i>Settings
+            </a>
+            {% endif %}
+        </div>
     </div>
-</div>
 
-<!-- Company Info Card -->
-<div class="row mb-4">
-    <div class="col-md-12">
-        <div class="card">
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-8">
-                        <h5 class="card-title">Company Information</h5>
-                        <dl class="row">
-                            <dt class="col-sm-3">Company Name:</dt>
-                            <dd class="col-sm-9">{{ company.name }}</dd>
-                            
-                            {% if company.description %}
-                            <dt class="col-sm-3">Description:</dt>
-                            <dd class="col-sm-9">{{ company.description }}</dd>
-                            {% endif %}
-                            
-                            {% if company.industry %}
-                            <dt class="col-sm-3">Industry:</dt>
-                            <dd class="col-sm-9">{{ company.industry }}</dd>
-                            {% endif %}
-                            
-                            {% if company.website %}
-                            <dt class="col-sm-3">Website:</dt>
-                            <dd class="col-sm-9"><a href="{{ company.website }}" target="_blank">{{ company.website }}</a></dd>
-                            {% endif %}
-                            
-                            <dt class="col-sm-3">Subscription:</dt>
-                            <dd class="col-sm-9">
-                                <span class="badge bg-info">{{ company.subscription_plan|upper }}</span>
-                            </dd>
-                            
-                            <dt class="col-sm-3">Status:</dt>
-                            <dd class="col-sm-9">
-                                {% if company.is_active %}
-                                <span class="badge bg-success">Active</span>
-                                {% else %}
-                                <span class="badge bg-danger">Inactive</span>
+    <!-- Company Info Card -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h5 class="card-title">Company Information</h5>
+                            <dl class="row">
+                                <dt class="col-sm-3">Company Name:</dt>
+                                <dd class="col-sm-9">{{ company.name }}</dd>
+                                
+                                {% if company.description %}
+                                <dt class="col-sm-3">Description:</dt>
+                                <dd class="col-sm-9">{{ company.description }}</dd>
                                 {% endif %}
-                            </dd>
-                        </dl>
-                    </div>
-                    <div class="col-md-4">
-                        <h5 class="card-title">Sync Status</h5>
-                        <p>
-                            <strong>Last Sync:</strong><br>
-                            {{ stats.last_sync|datetime if stats.last_sync else 'Never' }}
-                        </p>
-                        <p>
-                            <strong>Status:</strong><br>
-                            <span class="badge bg-{{ 'success' if stats.sync_status == 'completed' else 'warning' if stats.sync_status == 'in_progress' else 'danger' }}">
-                                {{ stats.sync_status|upper }}
-                            </span>
-                        </p>
+                                
+                                {% if company.industry %}
+                                <dt class="col-sm-3">Industry:</dt>
+                                <dd class="col-sm-9">{{ company.industry }}</dd>
+                                {% endif %}
+                                
+                                {% if company.website %}
+                                <dt class="col-sm-3">Website:</dt>
+                                <dd class="col-sm-9"><a href="{{ company.website }}" target="_blank">{{ company.website }}</a></dd>
+                                {% endif %}
+                                
+                                <dt class="col-sm-3">Status:</dt>
+                                <dd class="col-sm-9">
+                                    {% if company.is_active %}
+                                    <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">Inactive</span>
+                                    {% endif %}
+                                </dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-4">
+                            <h5 class="card-title">CRM Sync Status</h5>
+                            <p>
+                                <strong>Last Sync:</strong><br>
+                                {{ stats.last_sync|datetime if stats.last_sync else 'Never' }}
+                            </p>
+                            <p>
+                                <strong>Status:</strong><br>
+                                <span class="badge bg-{{ 'success' if stats.sync_status == 'completed' else 'warning' if stats.sync_status == 'in_progress' else 'secondary' }}">
+                                    {{ stats.sync_status|upper }}
+                                </span>
+                            </p>
+                            <p>
+                                <strong>Total Syncs:</strong><br>
+                                {{ company.total_syncs or 0 }}
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Statistics Cards -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card text-white bg-primary">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-title mb-0">Customers</h6>
-                        <h2 class="mb-0">{{ stats.total_customers|number }}</h2>
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title mb-0">Customers</h6>
+                            <h2 class="mb-0">{{ stats.total_customers|number }}</h2>
+                            <small>Phase 4 Feature</small>
+                        </div>
+                        <div>
+                            <i class="fas fa-users fa-3x opacity-50"></i>
+                        </div>
                     </div>
-                    <div>
-                        <i class="fas fa-users fa-3x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card text-white bg-info">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title mb-0">Tickets</h6>
+                            <h2 class="mb-0">{{ stats.total_tickets|number }}</h2>
+                            <small>Phase 4 Feature</small>
+                        </div>
+                        <div>
+                            <i class="fas fa-ticket-alt fa-3x opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card text-white bg-success">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title mb-0">Payments</h6>
+                            <h2 class="mb-0">{{ stats.total_payments|number }}</h2>
+                            <small>Phase 4 Feature</small>
+                        </div>
+                        <div>
+                            <i class="fas fa-dollar-sign fa-3x opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card text-white bg-warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title mb-0">Active Users</h6>
+                            <h2 class="mb-0">{{ stats.active_users|number }}</h2>
+                            <small>✅ Current</small>
+                        </div>
+                        <div>
+                            <i class="fas fa-users-cog fa-3x opacity-50"></i>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    
-    <div class="col-md-3">
-        <div class="card text-white bg-info">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-title mb-0">Tickets</h6>
-                        <h2 class="mb-0">{{ stats.total_tickets|number }}</h2>
-                    </div>
-                    <div>
-                        <i class="fas fa-ticket-alt fa-3x opacity-50"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="card text-white bg-success">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-title mb-0">Payments</h6>
-                        <h2 class="mb-0">{{ stats.total_payments|number }}</h2>
-                    </div>
-                    <div>
-                        <i class="fas fa-dollar-sign fa-3x opacity-50"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="card text-white bg-danger">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-title mb-0">High Risk</h6>
-                        <h2 class="mb-0">{{ stats.high_risk_customers|number }}</h2>
-                    </div>
-                    <div>
-                        <i class="fas fa-exclamation-triangle fa-3x opacity-50"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
-<!-- Quick Actions -->
-<div class="row">
-    <div class="col-md-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Quick Actions</h5>
+    <!-- Phase 3 Complete Notice -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-success">
+                <h5 class="alert-heading">
+                    <i class="fas fa-check-circle me-2"></i>Phase 3 Complete!
+                </h5>
+                <p class="mb-0">
+                    <strong>✅ Multi-tenant system operational</strong><br>
+                    Your company management system is ready. Customer data, predictions, and CRM sync will be available in Phase 4.
+                </p>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-3">
-                        <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline-primary w-100 mb-2">
-                            <i class="fas fa-chart-line me-2"></i>View Dashboard
-                        </a>
-                    </div>
-                    <div class="col-md-3">
-                        <a href="{{ url_for('predictions.customers') }}" class="btn btn-outline-info w-100 mb-2">
-                            <i class="fas fa-chart-pie me-2"></i>View Predictions
-                        </a>
-                    </div>
-                    <div class="col-md-3">
-                        <a href="{{ url_for('company.users') }}" class="btn btn-outline-success w-100 mb-2">
-                            <i class="fas fa-users-cog me-2"></i>Manage Users
-                        </a>
-                    </div>
-                    <div class="col-md-3">
-                        <a href="{{ url_for('company.settings') }}" class="btn btn-outline-secondary w-100 mb-2">
-                            <i class="fas fa-cog me-2"></i>Settings
-                        </a>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline-primary w-100 mb-2">
+                                <i class="fas fa-chart-line me-2"></i>View Dashboard
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-outline-secondary w-100 mb-2" disabled title="Phase 4 Feature">
+                                <i class="fas fa-chart-pie me-2"></i>View Predictions
+                                <br><small>(Phase 4)</small>
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{{ url_for('company.users') }}" class="btn btn-outline-success w-100 mb-2">
+                                <i class="fas fa-users-cog me-2"></i>Manage Users
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{{ url_for('company.settings') }}" class="btn btn-outline-secondary w-100 mb-2">
+                                <i class="fas fa-cog me-2"></i>Settings
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -186,39 +207,14 @@
 
 {% block extra_js %}
 <script>
-$(document).ready(function() {
-    $('#syncButton').click(function() {
-        const button = $(this);
-        const originalHtml = button.html();
-        
-        // Disable button and show loading
-        button.prop('disabled', true);
-        button.html('<i class="fas fa-spinner fa-spin me-2"></i>Syncing...');
-        
-        $.ajax({
-            url: '{{ url_for("company.sync_data") }}',
-            method: 'POST',
-            success: function(response) {
-                if (response.success) {
-                    alert('Data synchronized successfully!\n\n' +
-                          'Customers: ' + response.results.customers + '\n' +
-                          'Tickets: ' + response.results.tickets + '\n' +
-                          'Payments: ' + response.results.payments);
-                    location.reload();
-                } else {
-                    alert('Sync failed: ' + response.message);
-                }
-            },
-            error: function(xhr) {
-                const response = xhr.responseJSON;
-                alert('Sync failed: ' + (response ? response.message : 'Unknown error'));
-            },
-            complete: function() {
-                button.prop('disabled', false);
-                button.html(originalHtml);
-            }
+// Sync button handler (disabled in Phase 3)
+document.addEventListener('DOMContentLoaded', function() {
+    const syncButton = document.getElementById('syncButton');
+    if (syncButton) {
+        syncButton.addEventListener('click', function() {
+            alert('CRM Sync will be available in Phase 4!\n\nPhase 4 includes:\n- CRM data synchronization\n- Customer management\n- Ticket tracking\n- Payment history');
         });
-    });
+    }
 });
 </script>
 {% endblock %}

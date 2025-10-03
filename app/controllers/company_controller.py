@@ -1,5 +1,6 @@
 """
 Company Controller - Company Management and Settings
+Safe version that handles missing Phase 4 models
 """
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
@@ -26,14 +27,14 @@ def index():
     """
     company = current_user.company
     
-    # Get company statistics
+    # Get company statistics - all methods are safe now
     stats = {
-        'total_customers': company.get_customer_count() if hasattr(company, 'get_customer_count') else 0,
-        'total_tickets': company.get_ticket_count() if hasattr(company, 'get_ticket_count') else 0,
-        'total_payments': company.get_payment_count() if hasattr(company, 'get_payment_count') else 0,
-        'total_predictions': company.get_prediction_count() if hasattr(company, 'get_prediction_count') else 0,
-        'high_risk_customers': company.get_high_risk_customer_count() if hasattr(company, 'get_high_risk_customer_count') else 0,
-        'active_users': company.users.filter_by(is_active=True).count(),
+        'total_customers': company.get_customer_count(),
+        'total_tickets': company.get_ticket_count(),
+        'total_payments': company.get_payment_count(),
+        'total_predictions': company.get_prediction_count(),
+        'high_risk_customers': company.get_high_risk_customer_count(),
+        'active_users': company.get_active_user_count(),
         'last_sync': company.last_sync_at,
         'sync_status': company.sync_status
     }
@@ -68,10 +69,9 @@ def settings():
             # Update CRM API key if provided
             crm_api_key = request.form.get('crm_api_key', '').strip()
             if crm_api_key:
-                company.api_key = crm_api_key  # Uses the property setter
+                company.set_crm_api_key(crm_api_key)
             
             # Update application settings
-            current_settings = company.get_settings()
             settings_updates = {
                 'notification_email': request.form.get('notification_email', '').strip(),
                 'enable_email_alerts': request.form.get('enable_email_alerts') == 'on',
@@ -128,7 +128,7 @@ def add_user():
             role = request.form.get('role', 'viewer').strip()
             password = request.form.get('password', '')
             confirm_password = request.form.get('confirm_password', '')
-            is_active = request.form.get('is_active') == 'on'  # Checkbox value
+            is_active = request.form.get('is_active') == 'on'
             
             # Validation
             if not email:
@@ -244,7 +244,7 @@ def sync_data():
         # Run sync
         results = crm_service.sync_data()
         
-        if 'error' in results:
+        if results.get('status') == 'error':
             return jsonify({
                 'success': False,
                 'message': results.get('message', 'Sync failed')
@@ -252,7 +252,7 @@ def sync_data():
         
         return jsonify({
             'success': True,
-            'message': results.get('message', 'Data synchronized successfully'),
+            'message': results.get('message', 'CRM service is not yet implemented (Phase 4)'),
             'results': results
         })
         
@@ -275,7 +275,8 @@ def sync_status():
     return jsonify({
         'status': company.sync_status,
         'last_sync': company.last_sync_at.isoformat() if company.last_sync_at else None,
-        'error': getattr(company, 'sync_error', None)
+        'total_syncs': company.total_syncs,
+        'error': company.sync_error
     })
 
 
@@ -290,24 +291,27 @@ def statistics():
     
     stats = {
         'customers': {
-            'total': company.get_customer_count() if hasattr(company, 'get_customer_count') else 0,
+            'total': company.get_customer_count(),
+            'active': company.get_active_customer_count(),
         },
         'tickets': {
-            'total': company.get_ticket_count() if hasattr(company, 'get_ticket_count') else 0,
+            'total': company.get_ticket_count(),
         },
         'payments': {
-            'total': company.get_payment_count() if hasattr(company, 'get_payment_count') else 0,
+            'total': company.get_payment_count(),
         },
         'predictions': {
-            'total': company.get_prediction_count() if hasattr(company, 'get_prediction_count') else 0,
-            'high_risk': company.get_high_risk_customer_count() if hasattr(company, 'get_high_risk_customer_count') else 0,
+            'total': company.get_prediction_count(),
+            'high_risk': company.get_high_risk_customer_count(),
         },
         'users': {
-            'active': company.users.filter_by(is_active=True).count(),
+            'total': company.users.count(),
+            'active': company.get_active_user_count(),
         },
         'sync': {
             'status': company.sync_status,
             'last_sync': company.last_sync_at.isoformat() if company.last_sync_at else None,
+            'total_syncs': company.total_syncs,
         }
     }
     

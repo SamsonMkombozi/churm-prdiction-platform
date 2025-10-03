@@ -1,10 +1,10 @@
 """
-Authentication Controller
-Handles login, registration, and logout
+Fixed Authentication Controller with Proper Logout
+app/controllers/auth_controller.py
 """
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import current_user, logout_user
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from flask_login import current_user, logout_user, login_required
 from app.services.auth_service import AuthService
 
 auth_bp = Blueprint('auth', __name__)
@@ -16,7 +16,7 @@ def login():
         return redirect(url_for('dashboard.index'))
     
     if request.method == 'POST':
-        email = request.form.get('email', '').strip()  # Changed from 'username' to 'email'
+        email = request.form.get('email', '').strip()
         password = request.form.get('password', '')
         remember = request.form.get('remember', False)
         
@@ -64,8 +64,23 @@ def register():
     return render_template('auth/register.html')
 
 @auth_bp.route('/logout')
+@login_required
 def logout():
-    """Logout user"""
+    """
+    Logout user - properly sign out
+    Clears session and logs out user
+    """
+    # Get user name before logout for the message
+    user_name = current_user.full_name if hasattr(current_user, 'full_name') else 'User'
+    
+    # Logout the user (Flask-Login)
     logout_user()
-    flash('You have been logged out.', 'info')
+    
+    # Clear the session completely
+    session.clear()
+    
+    # Flash success message
+    flash(f'Goodbye {user_name}! You have been successfully logged out.', 'success')
+    
+    # Redirect to login page
     return redirect(url_for('auth.login'))
