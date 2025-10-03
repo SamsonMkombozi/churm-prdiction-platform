@@ -5,10 +5,6 @@ import os
 from flask import Flask
 from app.config.settings import get_config
 from app.extensions import init_extensions, db, login_manager
-from app.models.user import User
-from app.models.company import Company
-
-__all__ = ['User', 'Company']
 
 def create_app(config_name='development'):
     """
@@ -40,7 +36,10 @@ def create_app(config_name='development'):
     
     # Import models here (after db is initialized)
     with app.app_context():
+        # Import all models
         from app.models import user, company
+        # Phase 4 models
+        from app.models import customer, ticket, payment
         
         # Create tables
         db.create_all()
