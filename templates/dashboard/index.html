@@ -1,363 +1,434 @@
 {% extends 'base.html' %}
 
-{% block title %}CRM Dashboard - {{ company.name }}{% endblock %}
+{% block title %}Dashboard - {{ company.name }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-    <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="h2">
-            <i class="fas fa-sync-alt me-2"></i>CRM Data Management
-        </h1>
-        <div>
-            {% if current_user.is_manager() %}
-            <button type="button" class="btn btn-primary" onclick="syncNow()">
-                <i class="fas fa-sync-alt me-2"></i>Sync Now
-            </button>
-            {% endif %}
-            <a href="{{ url_for('company.index') }}" class="btn btn-outline-secondary">
-                <i class="fas fa-arrow-left me-2"></i>Back
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --primary-color: #4e73df;
+            --success-color: #1cc88a;
+            --warning-color: #f6c23e;
+            --danger-color: #e74a3b;
+            --info-color: #36b9cc;
+        }
+
+        body {
+            background-color: #f8f9fc;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .navbar {
+            background: linear-gradient(135deg, var(--primary-color), #224abe);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .sidebar {
+            min-height: 100vh;
+            background: #fff;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+        }
+
+        .sidebar .nav-link {
+            color: #5a5c69;
+            padding: 1rem 1.5rem;
+            border-left: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .sidebar .nav-link:hover {
+            background-color: #f8f9fc;
+            border-left-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .sidebar .nav-link.active {
+            background-color: #eaecf4;
+            border-left-color: var(--primary-color);
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        .stat-card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 0.5rem 2rem 0 rgba(58, 59, 69, 0.25);
+        }
+
+        .stat-icon {
+            font-size: 2rem;
+            opacity: 0.3;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0.5rem 0;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .action-card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+            transition: transform 0.3s;
+        }
+
+        .action-card:hover {
+            transform: translateY(-3px);
+        }
+
+        .btn-action {
+            padding: 1rem 2rem;
+            font-weight: 600;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .chart-card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+        }
+
+        .progress-thin {
+            height: 8px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="{{ url_for('dashboard.index') }}">
+                <i class="fas fa-chart-line me-2"></i>ChurnPredict Pro
             </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-circle me-1"></i> {{ current_user.full_name }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item disabled"><small class="text-muted">{{ current_user.email }}</small></a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('company.index') }}"><i class="fas fa-building me-2"></i>My Company</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('company.settings') }}"><i class="fas fa-cog me-2"></i>Settings</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <nav class="col-md-2 d-md-block sidebar">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item"><a class="nav-link active" href="{{ url_for('dashboard.index') }}"><i class="fas fa-tachometer-alt me-2"></i>Dashboard</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('company.index') }}"><i class="fas fa-building me-2"></i>Company</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('crm.customers') }}"><i class="fas fa-users me-2"></i>Customers</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#"><i class="fas fa-brain me-2"></i>Predictions</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard.analytics') }}"><i class="fas fa-chart-bar me-2"></i>Analytics</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('company.settings') }}"><i class="fas fa-cog me-2"></i>Settings</a></li>
+                    </ul>
+                </div>
+            </nav>
+
+            <main class="col-md-10 ms-sm-auto px-md-4">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2"><i class="fas fa-tachometer-alt me-2"></i>Dashboard Overview</h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        <a href="{{ url_for('crm.dashboard') }}" class="btn btn-sm btn-primary">
+                            <i class="fas fa-sync me-1"></i>CRM Dashboard
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Statistics Cards -->
+                <div class="row mb-4">
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="stat-card card border-left-primary">
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col">
+                                        <div class="stat-label text-primary">Total Customers</div>
+                                        <div class="stat-value text-dark">{{ stats.total_customers|number }}</div>
+                                        <div class="text-muted small">From CRM data</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-users stat-icon text-primary"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="stat-card card border-left-danger">
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col">
+                                        <div class="stat-label text-danger">High Risk</div>
+                                        <div class="stat-value text-dark">{{ stats.high_risk_customers|number }}</div>
+                                        <div class="text-danger small"><i class="fas fa-exclamation-triangle me-1"></i>Needs attention</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-exclamation-circle stat-icon text-danger"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="stat-card card border-left-warning">
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col">
+                                        <div class="stat-label text-warning">Support Tickets</div>
+                                        <div class="stat-value text-dark">{{ stats.total_tickets|number }}</div>
+                                        <div class="text-muted small">Total tickets</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-ticket-alt stat-icon text-warning"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="stat-card card border-left-success">
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col">
+                                        <div class="stat-label text-success">Payments</div>
+                                        <div class="stat-value text-dark">{{ stats.total_payments|number }}</div>
+                                        <div class="text-success small"><i class="fas fa-check-circle me-1"></i>Transactions</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-dollar-sign stat-icon text-success"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Company Section -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card action-card">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0"><i class="fas fa-building me-2"></i>Active Company: {{ company.name }}</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col-md-4">
+                                        <h6 class="text-muted mb-2">Company Info</h6>
+                                        <p class="mb-1"><strong>Name:</strong> {{ company.name }}</p>
+                                        {% if company.industry %}<p class="mb-1"><strong>Industry:</strong> {{ company.industry }}</p>{% endif %}
+                                        <p class="mb-0"><strong>Active Users:</strong> {{ stats.active_users|number }}</p>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <h6 class="text-muted mb-2">CRM Connection</h6>
+                                        <div class="d-flex align-items-center mb-2">
+                                            <span class="badge bg-{{ 'success' if company.crm_api_url else 'secondary' }} me-2">
+                                                {{ 'Connected' if company.crm_api_url else 'Not configured' }}
+                                            </span>
+                                        </div>
+                                        {% if company.crm_api_url %}
+                                        <p class="mb-0 small"><code class="small">{{ company.crm_api_url[:50] }}...</code></p>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="d-grid gap-2">
+                                            <a href="{{ url_for('crm.dashboard') }}" class="btn btn-primary btn-sm">
+                                                <i class="fas fa-sync me-2"></i>Go to CRM
+                                            </a>
+                                            <a href="{{ url_for('company.index') }}" class="btn btn-outline-secondary btn-sm">
+                                                <i class="fas fa-info-circle me-2"></i>View Details
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card action-card">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0"><i class="fas fa-bolt me-2"></i>Quick Actions</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row text-center">
+                                    <div class="col-md-4 mb-3">
+                                        <a href="{{ url_for('crm.dashboard') }}" class="btn btn-primary btn-action w-100">
+                                            <i class="fas fa-sync-alt fa-2x mb-2 d-block"></i>
+                                            <span>CRM Dashboard</span>
+                                        </a>
+                                        <small class="text-muted d-block mt-2">View and sync CRM data</small>
+                                    </div>
+                                    
+                                    <div class="col-md-4 mb-3">
+                                        <a href="{{ url_for('crm.customers') }}" class="btn btn-success btn-action w-100">
+                                            <i class="fas fa-users fa-2x mb-2 d-block"></i>
+                                            <span>View Customers</span>
+                                        </a>
+                                        <small class="text-muted d-block mt-2">Browse all customers</small>
+                                    </div>
+                                    
+                                    <div class="col-md-4 mb-3">
+                                        <a href="{{ url_for('company.settings') }}" class="btn btn-info btn-action w-100">
+                                            <i class="fas fa-cog fa-2x mb-2 d-block"></i>
+                                            <span>Settings</span>
+                                        </a>
+                                        <small class="text-muted d-block mt-2">Configure your company</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="row mb-4">
+                    <div class="col-lg-8 mb-4">
+                        <div class="chart-card card">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0"><i class="fas fa-chart-area me-2"></i>Churn Risk Trend</h5>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="churnTrendChart" height="80"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-4 mb-4">
+                        <div class="chart-card card">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Risk Distribution</h5>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="riskDistChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0"><i class="fas fa-history me-2"></i>Recent Activity</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Time</th>
+                                                <th>Activity</th>
+                                                <th>Status</th>
+                                                <th>Details</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td>5 min ago</td>
+                                                <td><i class="fas fa-sync text-primary me-2"></i>Data Sync</td>
+                                                <td><span class="badge bg-success">Completed</span></td>
+                                                <td>1,247 customers synced</td>
+                                            </tr>
+                                            <tr>
+                                                <td>1 hour ago</td>
+                                                <td><i class="fas fa-brain text-info me-2"></i>Prediction Run</td>
+                                                <td><span class="badge bg-success">Completed</span></td>
+                                                <td>89 high-risk customers identified</td>
+                                            </tr>
+                                            <tr>
+                                                <td>2 hours ago</td>
+                                                <td><i class="fas fa-bell text-warning me-2"></i>Alert Sent</td>
+                                                <td><span class="badge bg-warning">Sent</span></td>
+                                                <td>High-risk customer notification</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Phase Progress -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card border-info">
+                            <div class="card-header bg-info text-white">
+                                <h5 class="mb-0"><i class="fas fa-rocket me-2"></i>Implementation Progress</h5>
+                            </div>
+                            <div class="card-body">
+                                <ol class="mb-0">
+                                    <li class="mb-2">
+                                        <strong>Phase 4: CRM Integration</strong> - Complete ✅
+                                        <div class="progress progress-thin mt-2">
+                                            <div class="progress-bar bg-success" style="width: 100%"></div>
+                                        </div>
+                                    </li>
+                                    <li class="mb-2">
+                                        <strong>Phase 5: ML Model Setup</strong> - Coming next
+                                        <div class="progress progress-thin mt-2">
+                                            <div class="progress-bar bg-warning" style="width: 0%"></div>
+                                        </div>
+                                    </li>
+                                    <li class="mb-2">
+                                        <strong>Phase 6: Prediction Engine</strong> - Upcoming
+                                        <div class="progress progress-thin mt-2">
+                                            <div class="progress-bar" style="width: 0%"></div>
+                                        </div>
+                                    </li>
+                                    <li class="mb-0">
+                                        <strong>Phase 7: Analytics Dashboard</strong> - Upcoming
+                                        <div class="progress progress-thin mt-2">
+                                            <div class="progress-bar" style="width: 0%"></div>
+                                        </div>
+                                    </li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
         </div>
     </div>
-
-    <!-- Sync Status Card -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card border-{{ 'success' if company.sync_status == 'completed' else 'warning' if company.sync_status == 'in_progress' else 'secondary' }}">
-                <div class="card-header bg-{{ 'success' if company.sync_status == 'completed' else 'warning' if company.sync_status == 'in_progress' else 'secondary' }} text-white">
-                    <h5 class="mb-0">
-                        <i class="fas fa-info-circle me-2"></i>Sync Status
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-3">
-                            <strong>Status:</strong><br>
-                            <span class="badge bg-{{ 'success' if company.sync_status == 'completed' else 'warning' if company.sync_status == 'in_progress' else 'secondary' }} fs-6">
-                                {{ company.sync_status|upper }}
-                            </span>
-                        </div>
-                        <div class="col-md-3">
-                            <strong>Last Sync:</strong><br>
-                            {{ company.last_sync_at|datetime if company.last_sync_at else 'Never' }}
-                        </div>
-                        <div class="col-md-3">
-                            <strong>Total Syncs:</strong><br>
-                            {{ company.total_syncs or 0 }}
-                        </div>
-                        <div class="col-md-3">
-                            <strong>CRM Endpoint:</strong><br>
-                            <small><code>{{ company.crm_api_url or 'Not configured' }}</code></small>
-                        </div>
-                    </div>
-                    
-                    {% if company.sync_error %}
-                    <div class="alert alert-danger mt-3 mb-0">
-                        <strong>Last Error:</strong> {{ company.sync_error }}
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Statistics Cards -->
-    <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="card border-left-primary">
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                Customers
-                            </div>
-                            <div class="h4 mb-0 font-weight-bold text-gray-800">
-                                {{ stats.customers|number }}
-                            </div>
-                            <small class="text-muted">{{ stats.active_customers|number }} active</small>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-users fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-4">
-            <div class="card border-left-info">
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col">
-                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                                Support Tickets
-                            </div>
-                            <div class="h4 mb-0 font-weight-bold text-gray-800">
-                                {{ stats.tickets|number }}
-                            </div>
-                            <small class="text-muted">{{ stats.open_tickets|number }} open</small>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-ticket-alt fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-4">
-            <div class="card border-left-success">
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                Total Revenue
-                            </div>
-                            <div class="h4 mb-0 font-weight-bold text-gray-800">
-                                {{ stats.total_revenue|currency }}
-                            </div>
-                            <small class="text-muted">{{ stats.payments|number }} transactions</small>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Recent Customers -->
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-users me-2"></i>Recent Customers
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Status</th>
-                                    <th>Joined</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for customer in recent_customers %}
-                                <tr>
-                                    <td>{{ customer.customer_name }}</td>
-                                    <td><small>{{ customer.email }}</small></td>
-                                    <td>
-                                        <span class="badge bg-{{ 'success' if customer.status == 'active' else 'secondary' }}">
-                                            {{ customer.status }}
-                                        </span>
-                                    </td>
-                                    <td><small>{{ customer.created_at|date }}</small></td>
-                                </tr>
-                                {% else %}
-                                <tr>
-                                    <td colspan="4" class="text-center text-muted">
-                                        No customers yet. Sync CRM data to get started.
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    <a href="{{ url_for('company.index') }}" class="btn btn-sm btn-outline-primary w-100">
-                        View All Customers
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Open Tickets -->
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-ticket-alt me-2"></i>Open Tickets
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Ticket #</th>
-                                    <th>Title</th>
-                                    <th>Priority</th>
-                                    <th>Created</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for ticket in open_tickets %}
-                                <tr>
-                                    <td><small>{{ ticket.ticket_number }}</small></td>
-                                    <td>{{ ticket.title|truncate(30) }}</td>
-                                    <td>
-                                        <span class="badge bg-{{ 'danger' if ticket.priority == 'high' else 'warning' if ticket.priority == 'medium' else 'secondary' }}">
-                                            {{ ticket.priority }}
-                                        </span>
-                                    </td>
-                                    <td><small>{{ ticket.created_at|date }}</small></td>
-                                </tr>
-                                {% else %}
-                                <tr>
-                                    <td colspan="4" class="text-center text-muted">
-                                        No open tickets
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    <a href="{{ url_for('company.index') }}" class="btn btn-sm btn-outline-info w-100">
-                        View All Tickets
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Recent Payments -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-credit-card me-2"></i>Recent Payments
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Customer</th>
-                                    <th>Amount</th>
-                                    <th>Method</th>
-                                    <th>Status</th>
-                                    <th>Reference</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for payment in recent_payments %}
-                                <tr>
-                                    <td>{{ payment.payment_date|datetime }}</td>
-                                    <td>{{ payment.customer.customer_name if payment.customer else 'N/A' }}</td>
-                                    <td><strong>{{ payment.amount|currency(payment.currency) }}</strong></td>
-                                    <td><small>{{ payment.payment_method }}</small></td>
-                                    <td>
-                                        <span class="badge bg-{{ 'success' if payment.status == 'completed' else 'warning' if payment.status == 'pending' else 'danger' }}">
-                                            {{ payment.status }}
-                                        </span>
-                                    </td>
-                                    <td><small><code>{{ payment.reference_number or payment.transaction_id }}</code></small></td>
-                                </tr>
-                                {% else %}
-                                <tr>
-                                    <td colspan="6" class="text-center text-muted">
-                                        No payment records yet
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    <a href="{{ url_for('company.index') }}" class="btn btn-sm btn-outline-success w-100">
-                        View All Payments
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Sync Progress (Hidden by default) -->
-    <div id="syncProgress" class="row mb-4" style="display: none;">
-        <div class="col-12">
-            <div class="card border-info">
-                <div class="card-body">
-                    <h5 class="card-title">
-                        <i class="fas fa-spinner fa-spin me-2"></i>Synchronizing...
-                    </h5>
-                    <div class="progress" style="height: 25px;">
-                        <div id="syncProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
-                             role="progressbar" style="width: 0%">0%</div>
-                    </div>
-                    <p class="mt-2 mb-0" id="syncStatus">Initializing sync...</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-function syncNow() {
-    if (!confirm('Start CRM data synchronization?\n\nThis will fetch the latest customers, tickets, and payments from your CRM.')) {
-        return;
-    }
-    
-    // Show progress
-    document.getElementById('syncProgress').style.display = 'block';
-    
-    // Disable sync button
-    event.target.disabled = true;
-    event.target.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Syncing...';
-    
-    // Update status
-    updateSyncStatus('Connecting to CRM...', 10);
-    
-    // Make AJAX request
-    fetch('{{ url_for("company.sync_data") }}', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            updateSyncStatus('Sync completed successfully!', 100);
-            
-            setTimeout(() => {
-                location.reload();
-            }, 2000);
-        } else {
-            updateSyncStatus('Sync failed: ' + data.message, 0);
-            alert('Sync failed: ' + data.message);
-        }
-    })
-    .catch(error => {
-        updateSyncStatus('Error: ' + error, 0);
-        alert('Sync error: ' + error);
-    })
-    .finally(() => {
-        event.target.disabled = false;
-        event.target.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Sync Now';
-    });
-}
-
-function updateSyncStatus(message, progress) {
-    document.getElementById('syncStatus').textContent = message;
-    document.getElementById('syncProgressBar').style.width = progress + '%';
-    document.getElementById('syncProgressBar').textContent = progress + '%';
-}
-
-// Auto-refresh if sync is in progress
-{% if company.sync_status == 'in_progress' %}
-setTimeout(() => {
-    location.reload();
-}, 5000);
-{% endif %}
-</script>
+</body>
+</html>
 {% endblock %}
