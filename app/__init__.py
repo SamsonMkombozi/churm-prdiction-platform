@@ -1,5 +1,5 @@
 """
-Flask Application Factory
+Flask Application Factory - Updated for Phase 4
 """
 import os
 from flask import Flask
@@ -72,6 +72,7 @@ def register_blueprints(app):
     from app.controllers.auth_controller import auth_bp
     from app.controllers.company_controller import company_bp
     from app.controllers.dashboard_controller import dashboard_bp
+    from app.controllers.crm_controller import crm_bp  # NEW: Phase 4
     
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.logger.info('✅ Auth blueprint registered')
@@ -81,6 +82,10 @@ def register_blueprints(app):
     
     app.register_blueprint(dashboard_bp, url_prefix='/')
     app.logger.info('✅ Dashboard blueprint registered')
+    
+    # NEW: Register CRM blueprint for Phase 4
+    app.register_blueprint(crm_bp, url_prefix='/crm')
+    app.logger.info('✅ CRM blueprint registered')
 
 def register_middleware(app):
     """Register middleware"""

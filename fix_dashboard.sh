@@ -1,3 +1,7 @@
+#!/bin/bash
+# Script to replace dashboard_controller.py
+
+cat > app/controllers/dashboard_controller.py << 'EOF'
 """
 Dashboard Controller - Fixed Version
 app/controllers/dashboard_controller.py
@@ -37,3 +41,7 @@ def analytics():
     """Analytics page"""
     company = current_user.company
     return render_template('dashboard/analytics.html', company=company)
+EOF
+
+echo "✅ Dashboard controller updated!"
+echo "Now restart your Flask app: python3 run.py"
