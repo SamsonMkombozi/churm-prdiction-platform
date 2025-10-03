@@ -1,5 +1,11 @@
-from app import db
+"""
+Authentication Service
+Handles user authentication operations
+"""
+
+from app.extensions import db
 from app.models.user import User
+from app.models.company import Company
 from flask_login import login_user, logout_user
 import re
 
@@ -7,14 +13,14 @@ class AuthService:
     """Service for authentication operations"""
     
     @staticmethod
-    def register_user(username, email, password, full_name=None):
+    def register_user(email, password, full_name, company_name=None):
         """
-        Register a new user
+        Register a new user and optionally create a company
         Returns: (success: bool, message: str, user: User)
         """
         # Validate input
-        if not username or not email or not password:
-            return False, "All fields are required", None
+        if not email or not password or not full_name:
+            return False, "Email, password, and full name are required", None
         
         # Validate email format
         if not re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', email):
@@ -24,20 +30,36 @@ class AuthService:
         if len(password) < 6:
             return False, "Password must be at least 6 characters", None
         
-        # Check if username exists
-        if User.query.filter_by(username=username).first():
-            return False, "Username already exists", None
-        
         # Check if email exists
-        if User.query.filter_by(email=email).first():
+        if User.query.filter_by(email=email.lower()).first():
             return False, "Email already registered", None
         
         try:
+            # If company name provided, create company first
+            company = None
+            if company_name:
+                # Check if company exists
+                existing_company = Company.query.filter_by(name=company_name).first()
+                if existing_company:
+                    return False, "Company name already exists", None
+                
+                # Create company
+                from slugify import slugify
+                company = Company(
+                    name=company_name,
+                    slug=slugify(company_name),
+                    is_active=True
+                )
+                db.session.add(company)
+                db.session.flush()  # Get company.id without committing
+            
             # Create new user
             user = User(
-                username=username,
-                email=email,
-                full_name=full_name or username
+                email=email.lower(),
+                full_name=full_name,
+                company_id=company.id if company else None,
+                role='admin' if company else 'viewer',  # First user in company is admin
+                is_active=True
             )
             user.set_password(password)
             
@@ -51,27 +73,32 @@ class AuthService:
             return False, f"Registration failed: {str(e)}", None
     
     @staticmethod
-    def login_user_service(username, password, remember=False):
+    def login_user_service(username_or_email, password, remember=False):
         """
         Authenticate user and create session
+        username_or_email: Can be either username or email (we only use email now)
         Returns: (success: bool, message: str, user: User)
         """
-        if not username or not password:
-            return False, "Username and password are required", None
+        if not username_or_email or not password:
+            return False, "Email and password are required", None
         
-        # Find user by username or email
+        # Find user by email (case-insensitive)
         user = User.query.filter(
-            (User.username == username) | (User.email == username)
+            User.email == username_or_email.lower()
         ).first()
         
         if not user:
-            return False, "Invalid username or password", None
+            return False, "Invalid email or password", None
         
         if not user.is_active:
-            return False, "Account is disabled", None
+            return False, "Account is disabled. Please contact your administrator.", None
+        
+        # Check if user's company is active
+        if user.company and not user.company.is_active:
+            return False, "Your company account is inactive. Please contact support.", None
         
         if not user.check_password(password):
-            return False, "Invalid username or password", None
+            return False, "Invalid email or password", None
         
         # Log in user
         login_user(user, remember=remember)
@@ -84,3 +111,23 @@ class AuthService:
         """Logout current user"""
         logout_user()
         return True, "Logged out successfully"
+    
+    @staticmethod
+    def change_password(user, old_password, new_password):
+        """
+        Change user password
+        Returns: (success: bool, message: str)
+        """
+        if not user.check_password(old_password):
+            return False, "Current password is incorrect"
+        
+        if len(new_password) < 6:
+            return False, "New password must be at least 6 characters"
+        
+        try:
+            user.set_password(new_password)
+            db.session.commit()
+            return True, "Password changed successfully"
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Failed to change password: {str(e)}"

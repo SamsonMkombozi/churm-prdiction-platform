@@ -4,11 +4,11 @@ Company Controller - Company Management and Settings
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
-from app import db
+from app.extensions import db
 from app.models.company import Company
 from app.models.user import User
 from app.middleware.tenant_middleware import manager_required, admin_required
-from app.services.crm_service import CRMService  # TODO: Create this
+from app.services.crm_service import CRMService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,12 +28,12 @@ def index():
     
     # Get company statistics
     stats = {
-        'total_customers': company.get_customer_count(),
-        'total_tickets': company.get_ticket_count(),
-        'total_payments': company.get_payment_count(),
-        'total_predictions': company.get_prediction_count(),
-        'high_risk_customers': company.get_high_risk_customer_count(),
-        'active_users': company.get_active_user_count(),
+        'total_customers': company.get_customer_count() if hasattr(company, 'get_customer_count') else 0,
+        'total_tickets': company.get_ticket_count() if hasattr(company, 'get_ticket_count') else 0,
+        'total_payments': company.get_payment_count() if hasattr(company, 'get_payment_count') else 0,
+        'total_predictions': company.get_prediction_count() if hasattr(company, 'get_prediction_count') else 0,
+        'high_risk_customers': company.get_high_risk_customer_count() if hasattr(company, 'get_high_risk_customer_count') else 0,
+        'active_users': company.users.filter_by(is_active=True).count(),
         'last_sync': company.last_sync_at,
         'sync_status': company.sync_status
     }
@@ -68,9 +68,10 @@ def settings():
             # Update CRM API key if provided
             crm_api_key = request.form.get('crm_api_key', '').strip()
             if crm_api_key:
-                company.set_crm_api_key(crm_api_key)
+                company.api_key = crm_api_key  # Uses the property setter
             
             # Update application settings
+            current_settings = company.get_settings()
             settings_updates = {
                 'notification_email': request.form.get('notification_email', '').strip(),
                 'enable_email_alerts': request.form.get('enable_email_alerts') == 'on',
@@ -121,42 +122,70 @@ def add_user():
     """
     if request.method == 'POST':
         try:
+            # Get form data
             email = request.form.get('email', '').strip().lower()
             full_name = request.form.get('full_name', '').strip()
-            role = request.form.get('role', 'viewer')
+            role = request.form.get('role', 'viewer').strip()
             password = request.form.get('password', '')
+            confirm_password = request.form.get('confirm_password', '')
+            is_active = request.form.get('is_active') == 'on'  # Checkbox value
             
             # Validation
-            if not email or not full_name or not password:
-                flash('All fields are required', 'danger')
+            if not email:
+                flash('Email is required', 'danger')
+                return render_template('company/add_user.html')
+            
+            if not full_name:
+                flash('Full name is required', 'danger')
+                return render_template('company/add_user.html')
+            
+            if not password:
+                flash('Password is required', 'danger')
+                return render_template('company/add_user.html')
+            
+            if len(password) < 6:
+                flash('Password must be at least 6 characters', 'danger')
+                return render_template('company/add_user.html')
+            
+            if password != confirm_password:
+                flash('Passwords do not match', 'danger')
                 return render_template('company/add_user.html')
             
             # Check if user exists
-            existing_user = User.find_by_email(email)
+            existing_user = User.query.filter_by(email=email).first()
             if existing_user:
-                flash('User with this email already exists', 'danger')
+                flash('A user with this email already exists', 'danger')
                 return render_template('company/add_user.html')
             
-            # Create user
-            from app.models.user import UserRole
-            user_role = UserRole[role.upper()]
+            # Validate role
+            valid_roles = ['viewer', 'analyst', 'manager', 'admin']
+            if role not in valid_roles:
+                flash('Invalid role selected', 'danger')
+                return render_template('company/add_user.html')
             
-            new_user = User.create_user(
+            # Create new user
+            new_user = User(
                 email=email,
-                password=password,
                 full_name=full_name,
                 company_id=current_user.company_id,
-                role=user_role
+                role=role,
+                is_active=is_active
             )
+            new_user.set_password(password)
             
-            flash(f'User {full_name} added successfully', 'success')
+            db.session.add(new_user)
+            db.session.commit()
+            
+            flash(f'User {full_name} ({email}) added successfully with role: {role}', 'success')
             return redirect(url_for('company.users'))
             
         except Exception as e:
             db.session.rollback()
             logger.error(f"Error adding user: {e}")
             flash(f'Failed to add user: {str(e)}', 'danger')
+            return render_template('company/add_user.html')
     
+    # GET request - show form
     return render_template('company/add_user.html')
 
 
@@ -210,20 +239,20 @@ def sync_data():
             }), 400
         
         # Initialize CRM service
-        crm_service = CRMService(company.id)
+        crm_service = CRMService(company)
         
         # Run sync
-        results = crm_service.sync_all_data()
+        results = crm_service.sync_data()
         
         if 'error' in results:
             return jsonify({
                 'success': False,
-                'message': results['error']
+                'message': results.get('message', 'Sync failed')
             }), 500
         
         return jsonify({
             'success': True,
-            'message': 'Data synchronized successfully',
+            'message': results.get('message', 'Data synchronized successfully'),
             'results': results
         })
         
@@ -246,8 +275,7 @@ def sync_status():
     return jsonify({
         'status': company.sync_status,
         'last_sync': company.last_sync_at.isoformat() if company.last_sync_at else None,
-        'total_syncs': company.total_syncs,
-        'error': company.sync_error
+        'error': getattr(company, 'sync_error', None)
     })
 
 
@@ -262,25 +290,24 @@ def statistics():
     
     stats = {
         'customers': {
-            'total': company.get_customer_count(),
+            'total': company.get_customer_count() if hasattr(company, 'get_customer_count') else 0,
         },
         'tickets': {
-            'total': company.get_ticket_count(),
+            'total': company.get_ticket_count() if hasattr(company, 'get_ticket_count') else 0,
         },
         'payments': {
-            'total': company.get_payment_count(),
+            'total': company.get_payment_count() if hasattr(company, 'get_payment_count') else 0,
         },
         'predictions': {
-            'total': company.get_prediction_count(),
-            'high_risk': company.get_high_risk_customer_count(),
+            'total': company.get_prediction_count() if hasattr(company, 'get_prediction_count') else 0,
+            'high_risk': company.get_high_risk_customer_count() if hasattr(company, 'get_high_risk_customer_count') else 0,
         },
         'users': {
-            'active': company.get_active_user_count(),
+            'active': company.users.filter_by(is_active=True).count(),
         },
         'sync': {
             'status': company.sync_status,
             'last_sync': company.last_sync_at.isoformat() if company.last_sync_at else None,
-            'total_syncs': company.total_syncs
         }
     }
     

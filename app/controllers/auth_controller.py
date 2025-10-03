@@ -1,3 +1,8 @@
+"""
+Authentication Controller
+Handles login, registration, and logout
+"""
+
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import current_user, logout_user
 from app.services.auth_service import AuthService
@@ -11,12 +16,12 @@ def login():
         return redirect(url_for('dashboard.index'))
     
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
+        email = request.form.get('email', '').strip()  # Changed from 'username' to 'email'
+        password = request.form.get('password', '')
         remember = request.form.get('remember', False)
         
         success, message, user = AuthService.login_user_service(
-            username, password, remember
+            email, password, remember
         )
         
         if success:
@@ -35,11 +40,11 @@ def register():
         return redirect(url_for('dashboard.index'))
     
     if request.method == 'POST':
-        username = request.form.get('username')
-        email = request.form.get('email')
-        password = request.form.get('password')
-        confirm_password = request.form.get('confirm_password')
-        full_name = request.form.get('full_name')
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        full_name = request.form.get('full_name', '').strip()
+        company_name = request.form.get('company_name', '').strip()
         
         # Validate password confirmation
         if password != confirm_password:
@@ -47,7 +52,7 @@ def register():
             return render_template('auth/register.html')
         
         success, message, user = AuthService.register_user(
-            username, email, password, full_name
+            email, password, full_name, company_name
         )
         
         if success:

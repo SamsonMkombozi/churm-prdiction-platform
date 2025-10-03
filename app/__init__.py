@@ -1,15 +1,12 @@
 """
 Flask Application Factory
 """
+import os
 from flask import Flask
 from app.config.settings import get_config
 from app.extensions import init_extensions, db, login_manager
 from app.models.user import User
 from app.models.company import Company
-# Import other models as you create them
-# from app.models.customer import Customer
-# from app.models.ticket import Ticket
-# from app.models.payment import Payment
 
 __all__ = ['User', 'Company']
 
@@ -17,11 +14,23 @@ def create_app(config_name='development'):
     """
     Application factory pattern
     """
-    app = Flask(__name__)
+    # IMPORTANT: Set template_folder to project root templates directory
+    # Get the project root (one level up from app/)
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    template_folder = os.path.join(project_root, 'templates')
+    static_folder = os.path.join(project_root, 'static')
+    
+    app = Flask(__name__, 
+                template_folder=template_folder,
+                static_folder=static_folder)
     
     # Load configuration
     config = get_config(config_name)
     app.config.from_object(config)
+    
+    # Log template path for debugging
+    app.logger.info(f"📁 Template folder: {app.template_folder}")
+    app.logger.info(f"📁 Static folder: {app.static_folder}")
     
     # Initialize extensions
     init_extensions(app)
@@ -58,8 +67,13 @@ def register_blueprints(app):
     from app.controllers.dashboard_controller import dashboard_bp
     
     app.register_blueprint(auth_bp, url_prefix='/auth')
+    app.logger.info('✅ Auth blueprint registered')
+    
     app.register_blueprint(company_bp, url_prefix='/company')
+    app.logger.info('✅ Company blueprint registered')
+    
     app.register_blueprint(dashboard_bp, url_prefix='/')
+    app.logger.info('✅ Dashboard blueprint registered')
 
 def register_middleware(app):
     """Register middleware"""
