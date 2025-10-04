@@ -2,76 +2,74 @@
 TRAINING DATA INFO
 ============================================================
 
-Total Rows: 8171
-Total Columns: 67
+Total Rows: 4533
+Total Columns: 65
 
-Churn Rate: 100.0%
+Churn Rate: 75.4%
 
 Columns:
-  - id                                       (object    ) -     0 nulls,   8171 unique
-  - customer_name                            (object    ) -     0 nulls,   8070 unique
-  - customer_phone                           (object    ) -     0 nulls,   5358 unique
-  - secondary_phone                          (object    ) -  8171 nulls,      0 unique
-  - customer_balance                         (object    ) -     0 nulls,   2166 unique
-  - customer_email                           (object    ) -     0 nulls,   5936 unique
-  - secondary_email                          (object    ) -  8170 nulls,      1 unique
-  - status                                   (int64     ) -     0 nulls,      1 unique
-  - splynx_id                                (object    ) -     1 nulls,   1333 unique
-  - connection_status                        (object    ) -     0 nulls,      6 unique
-  - nav_last_date_modified                   (object    ) -     0 nulls,     35 unique
-  - created_at                               (object    ) -     0 nulls,    880 unique
-  - updated_at                               (object    ) -     0 nulls,   1057 unique
-  - disconnection_date                       (object    ) -     0 nulls,    729 unique
-  - balance                                  (object    ) -  8171 nulls,      0 unique
-  - category                                 (object    ) -     0 nulls,      5 unique
-  - package                                  (object    ) -     0 nulls,   4471 unique
-  - lead_id                                  (float64   ) -     0 nulls,      2 unique
-  - billing_frequency                        (object    ) -  8171 nulls,      0 unique
-  - routers                                  (object    ) -     1 nulls,     19 unique
-  - sector                                   (object    ) -     1 nulls,    108 unique
-  - address                                  (object    ) -     0 nulls,      9 unique
-  - splynx_location                          (object    ) -  8171 nulls,      0 unique
-  - region_id                                (object    ) -     0 nulls,     10 unique
-  - router_ip                                (object    ) -  8171 nulls,      0 unique
-  - date_installed                           (object    ) -     0 nulls,   2383 unique
-  - is_ticket_sms                            (int64     ) -     0 nulls,      1 unique
-  - router_type                              (object    ) -  8171 nulls,      0 unique
-  - radio_IP                                 (object    ) -  8171 nulls,      0 unique
-  - isonboarded                              (float64   ) -     0 nulls,      3 unique
-  - FAT_name                                 (object    ) -  8171 nulls,      0 unique
-  - selfcare_pin                             (object    ) -  8171 nulls,      0 unique
-  - fup_status                               (object    ) -  8171 nulls,      0 unique
-  - customer_special                         (int64     ) -     0 nulls,      1 unique
-  - classification                           (object    ) -     0 nulls,      5 unique
-  - onboard_by                               (object    ) -  7797 nulls,      4 unique
-  - vat_registration                         (object    ) -  8171 nulls,      0 unique
-  - recovered_qualified                      (int64     ) -     0 nulls,      1 unique
-  - churned_date                             (object    ) -  8171 nulls,      0 unique
+  - id                                       (object    ) -     0 nulls,   4533 unique
+  - customer_name                            (object    ) -     0 nulls,   4448 unique
+  - customer_phone                           (object    ) -     0 nulls,   4504 unique
+  - secondary_phone                          (object    ) -  1142 nulls,   3391 unique
+  - customer_balance                         (object    ) -     0 nulls,   3453 unique
+  - customer_email                           (object    ) -     0 nulls,   3969 unique
+  - secondary_email                          (object    ) -  1142 nulls,   3331 unique
+  - status                                   (int64     ) -     0 nulls,      2 unique
+  - splynx_id                                (object    ) -     0 nulls,   4140 unique
+  - connection_status                        (object    ) -     0 nulls,      5 unique
+  - nav_last_date_modified                   (object    ) -     0 nulls,    116 unique
+  - created_at                               (object    ) -     0 nulls,    785 unique
+  - updated_at                               (object    ) -     0 nulls,    761 unique
+  - disconnection_date                       (object    ) -  1828 nulls,    389 unique
+  - balance                                  (object    ) -  1142 nulls,   3384 unique
+  - category                                 (object    ) -     0 nulls,      4 unique
+  - package                                  (object    ) -     0 nulls,      8 unique
+  - lead_id                                  (float64   ) -     0 nulls,    966 unique
+  - billing_frequency                        (object    ) -  1142 nulls,      2 unique
+  - routers                                  (object    ) -     0 nulls,    518 unique
+  - sector                                   (object    ) -     0 nulls,     99 unique
+  - address                                  (object    ) -     0 nulls,    504 unique
+  - splynx_location                          (object    ) -  1142 nulls,      5 unique
+  - region_id                                (object    ) -     0 nulls,     25 unique
+  - router_ip                                (object    ) -  1142 nulls,   3309 unique
+  - date_installed                           (object    ) -     0 nulls,    725 unique
+  - is_ticket_sms                            (int64     ) -     0 nulls,      2 unique
+  - router_type                              (object    ) -  1142 nulls,      3 unique
+  - radio_IP                                 (object    ) -  1142 nulls,   3313 unique
+  - isonboarded                              (float64   ) -     0 nulls,      2 unique
+  - FAT_name                                 (object    ) -  1142 nulls,    969 unique
+  - selfcare_pin                             (object    ) -  1142 nulls,   2888 unique
+  - fup_status                               (object    ) -  1142 nulls,      3 unique
+  - customer_special                         (int64     ) -     0 nulls,      2 unique
+  - classification                           (object    ) -     0 nulls,      4 unique
+  - onboard_by                               (object    ) -   910 nulls,      8 unique
+  - vat_registration                         (object    ) -  2847 nulls,      1 unique
+  - recovered_qualified                      (int64     ) -     0 nulls,      2 unique
+  - churned_date                             (object    ) -  3182 nulls,    378 unique
   - cst_call                                 (float64   ) -     0 nulls,      2 unique
-  - cst_winback_id                           (float64   ) -     0 nulls,      9 unique
-  - winback_failure_reason                   (object    ) -  7470 nulls,     12 unique
-  - winback_outcome                          (object    ) -  8081 nulls,      1 unique
-  - building_name                            (object    ) -  8171 nulls,      0 unique
-  - Update_Winbackonoffer                    (int64     ) -     0 nulls,      1 unique
-  - call_outcome                             (object    ) -  8171 nulls,      0 unique
-  - winback_updated_at                       (object    ) -  7510 nulls,    661 unique
-  - customer_id                              (object    ) -     0 nulls,   8171 unique
-  - total_payments                           (int64     ) -     0 nulls,      1 unique
-  - total_payment_amount                     (float64   ) -     0 nulls,      1 unique
-  - avg_payment_amount                       (float64   ) -     0 nulls,      1 unique
-  - days_since_last_payment                  (int64     ) -     0 nulls,      1 unique
-  - total_tickets                            (int64     ) -     0 nulls,      1 unique
-  - open_tickets                             (int64     ) -     0 nulls,      1 unique
-  - high_priority_tickets                    (int64     ) -     0 nulls,      1 unique
-  - days_since_last_ticket                   (int64     ) -     0 nulls,      1 unique
-  - signup_date                              (datetime64[ns]) -     0 nulls,    880 unique
-  - tenure_days                              (int64     ) -     0 nulls,     77 unique
-  - tenure_months                            (int64     ) -     0 nulls,      3 unique
-  - is_active                                (bool      ) -     0 nulls,      1 unique
-  - balance_amount                           (float64   ) -     0 nulls,      1 unique
+  - cst_winback_id                           (float64   ) -     0 nulls,   2893 unique
+  - winback_failure_reason                   (object    ) -  4196 nulls,     10 unique
+  - winback_outcome                          (object    ) -  4505 nulls,      1 unique
+  - building_name                            (object    ) -  1142 nulls,    963 unique
+  - Update_Winbackonoffer                    (int64     ) -     0 nulls,      2 unique
+  - call_outcome                             (object    ) -  4533 nulls,      0 unique
+  - winback_updated_at                       (object    ) -   822 nulls,    350 unique
+  - disconnect_dt                            (datetime64[ns]) -  1828 nulls,    360 unique
+  - customer_id                              (object    ) -     0 nulls,   4533 unique
+  - total_payments                           (float64   ) -     0 nulls,      1 unique
+  - days_since_last_payment                  (float64   ) -     0 nulls,      1 unique
+  - total_tickets                            (float64   ) -     0 nulls,      1 unique
+  - open_tickets                             (float64   ) -     0 nulls,      1 unique
+  - high_priority_tickets                    (float64   ) -     0 nulls,      1 unique
+  - days_since_last_ticket                   (float64   ) -     0 nulls,      1 unique
+  - signup_date                              (datetime64[ns]) -     0 nulls,    785 unique
+  - tenure_days                              (int64     ) -     0 nulls,    253 unique
+  - tenure_months                            (int64     ) -     0 nulls,      9 unique
+  - is_active                                (bool      ) -     0 nulls,      2 unique
+  - balance_amount                           (float64   ) -     0 nulls,   3385 unique
   - payment_frequency                        (float64   ) -     0 nulls,      1 unique
   - ticket_frequency                         (float64   ) -     0 nulls,      1 unique
-  - avg_monthly_payment                      (float64   ) -     0 nulls,      1 unique
   - support_engagement_ratio                 (float64   ) -     0 nulls,      1 unique
-  - churn_score                              (int64     ) -     0 nulls,      2 unique
-  - churned                                  (int64     ) -     0 nulls,      1 unique
+  - churn_score                              (int64     ) -     0 nulls,      4 unique
+  - churned                                  (int64     ) -     0 nulls,      2 unique

@@ -139,102 +139,118 @@ class ModelTrainer:
         return True
     
     def train(self):
-        """Train the model"""
-        print("\n" + "="*60)
-        print("TRAINING MODEL")
-        print("="*60)
-        
-        # Initialize model
-        self.model = ChurnModel()
-        
-        # Calculate scale_pos_weight for imbalanced data
-        neg_count = (self.y_train == 0).sum()
-        pos_count = (self.y_train == 1).sum()
-        scale_pos_weight = neg_count / pos_count if pos_count > 0 else 1
-        
-        print(f"📊 Class balance:")
-        print(f"   Negative (Active): {neg_count}")
-        print(f"   Positive (Churned): {pos_count}")
-        print(f"   Scale pos weight: {scale_pos_weight:.2f}")
-        
-        # Train
-        print("\n🚀 Training XGBoost model...")
-        self.model.train(self.X_train, self.y_train)
-        
-        print("✅ Training complete!")
-        
-        return True
+        try:
+            print("\n" + "="*60)
+            print("TRAINING MODEL")
+            print("="*60)
+            
+            # Calculate class weights
+            n_neg = (self.y_train == 0).sum()
+            n_pos = (self.y_train == 1).sum()
+            scale_pos_weight = n_neg / n_pos
+            
+            print(f"\n📊 Class balance:")
+            print(f"   Negative (Active): {n_neg}")
+            print(f"   Positive (Churned): {n_pos}")
+            print(f"   Scale pos weight: {scale_pos_weight:.2f}")
+            
+            # Initialize XGBoost model
+            self.model = XGBClassifier(
+                n_estimators=100,
+                max_depth=6,
+                learning_rate=0.1,
+                scale_pos_weight=scale_pos_weight,
+                random_state=42,
+                use_label_encoder=False,  # ✅ Important for newer versions
+                eval_metric='logloss',     # ✅ Prevents warnings
+                objective='binary:logistic'  # ✅ Explicitly set for binary classification
+            )
+            
+            print("\n🚀 Training XGBoost model...")
+            self.model.fit(self.X_train, self.y_train)
+            print("✅ Training complete!")
+            
+            return True
+            
+        except Exception as e:
+            print(f"\n❌ Error during training: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
     
     def evaluate(self):
         """Evaluate model performance"""
-        print("\n" + "="*60)
-        print("EVALUATING MODEL")
-        print("="*60)
-        
-        # Make predictions
-        y_pred = self.model.predict(self.X_test)
-        y_pred_proba = self.model.predict_proba(self.X_test)
-        
-        # Calculate metrics
-        accuracy = accuracy_score(self.y_test, y_pred)
-        precision = precision_score(self.y_test, y_pred, zero_division=0)
-        recall = recall_score(self.y_test, y_pred, zero_division=0)
-        f1 = f1_score(self.y_test, y_pred, zero_division=0)
-        
-        # ROC AUC (only if we have both classes)
         try:
-            roc_auc = roc_auc_score(self.y_test, y_pred_proba)
-        except:
-            roc_auc = 0.0
-        
-        # Store metrics
-        self.metrics = {
-            'accuracy': accuracy,
-            'precision': precision,
-            'recall': recall,
-            'f1_score': f1,
-            'roc_auc': roc_auc,
-            'test_samples': len(self.y_test),
-            'churned_samples': self.y_test.sum()
-        }
-        
-        # Print metrics
-        print(f"\n📊 Model Performance:")
-        print(f"   Accuracy:  {accuracy:.4f}")
-        print(f"   Precision: {precision:.4f}")
-        print(f"   Recall:    {recall:.4f}")
-        print(f"   F1 Score:  {f1:.4f}")
-        print(f"   ROC AUC:   {roc_auc:.4f}")
-        
-        # Confusion matrix
-        cm = confusion_matrix(self.y_test, y_pred)
-        print(f"\n📊 Confusion Matrix:")
-        print(f"                 Predicted")
-        print(f"                 0      1")
-        print(f"   Actual  0   {cm[0][0]:4d}  {cm[0][1]:4d}")
-        print(f"           1   {cm[1][0]:4d}  {cm[1][1]:4d}")
-        
-        # Classification report
-        print(f"\n📊 Classification Report:")
-        print(classification_report(self.y_test, y_pred, 
-                                   target_names=['Active', 'Churned'],
-                                   zero_division=0))
-        
-        # Feature importance
-        print(f"\n📊 Top 10 Important Features:")
-        feature_importance = self.model.get_feature_importance()
-        
-        if feature_importance:
-            top_features = sorted(
-                feature_importance.items(), 
-                key=lambda x: x[1], 
-                reverse=True
-            )[:10]
+            print("\n" + "="*60)
+            print("EVALUATING MODEL")
+            print("="*60)
             
-            for i, (feature, importance) in enumerate(top_features, 1):
-                print(f"   {i:2d}. {feature:30s} {importance:.4f}")
-        
-        return True
+            # Get predictions
+            y_pred = self.model.predict(self.X_test)
+            
+            # ✅ FIX: Handle both 1D and 2D probability outputs
+            y_pred_proba_raw = self.model.predict_proba(self.X_test)
+            
+            # Check if it's 2D (standard) or 1D (some XGBoost configurations)
+            if len(y_pred_proba_raw.shape) == 2:
+                y_pred_proba = y_pred_proba_raw[:, 1]  # Get probability of positive class
+            else:
+                y_pred_proba = y_pred_proba_raw  # Already 1D
+            
+            # Calculate metrics
+            accuracy = accuracy_score(self.y_test, y_pred)
+            precision = precision_score(self.y_test, y_pred, zero_division=0)
+            recall = recall_score(self.y_test, y_pred, zero_division=0)
+            f1 = f1_score(self.y_test, y_pred, zero_division=0)
+            roc_auc = roc_auc_score(self.y_test, y_pred_proba)
+            
+            print(f"\n📊 Model Performance:")
+            print(f"   Accuracy:  {accuracy:.4f}")
+            print(f"   Precision: {precision:.4f}")
+            print(f"   Recall:    {recall:.4f}")
+            print(f"   F1 Score:  {f1:.4f}")
+            print(f"   ROC AUC:   {roc_auc:.4f}")
+            
+            # Confusion Matrix
+            cm = confusion_matrix(self.y_test, y_pred)
+            print("\n📊 Confusion Matrix:")
+            print("                 Predicted")
+            print("                 0      1")
+            print(f"   Actual  0     {cm[0,0]:>3}   {cm[0,1]:>3}")
+            print(f"           1     {cm[1,0]:>3}   {cm[1,1]:>3}")
+            
+            # Classification Report
+            print("\n📊 Classification Report:")
+            print(classification_report(self.y_test, y_pred, 
+                                    target_names=['Active', 'Churned'],
+                                    zero_division=0))
+            
+            # Feature Importance
+            feature_importance = self.get_feature_importance()
+            if feature_importance is not None and not feature_importance.empty:
+                print("\n📊 Top 10 Important Features:")
+                top_features = feature_importance.head(10)
+                for idx, row in top_features.iterrows():
+                    print(f"   {row['feature']:30s} {row['importance']:.4f}")
+            
+            # Store metrics
+            self.metrics = {
+                'accuracy': accuracy,
+                'precision': precision,
+                'recall': recall,
+                'f1_score': f1,
+                'roc_auc': roc_auc,
+                'confusion_matrix': cm.tolist(),
+                'feature_importance': feature_importance.to_dict('records') if feature_importance is not None else None
+            }
+            
+            return True
+            
+        except Exception as e:
+            print(f"\n❌ Error during evaluation: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
     
     def save_model(self):
         """Save trained model"""

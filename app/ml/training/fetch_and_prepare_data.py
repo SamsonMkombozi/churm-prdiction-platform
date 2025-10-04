@@ -43,7 +43,7 @@ class CRMDataFetcher:
         Fetch data from a specific table
         
         Args:
-            table_name: Name of table (customers, payments, Tickects)
+            table_name: Name of table (customers, payments, tickects)
             
         Returns:
             List of records
@@ -103,7 +103,7 @@ class CRMDataFetcher:
         data = {
             'customers': self.fetch_table('customers'),
             'payments': self.fetch_table('payments'),
-            'tickets': self.fetch_table('Tickects')  # Note: API uses 'Tickects' spelling
+            'tickets': self.fetch_table('tickets')  # Note: API uses 'Tickects' spelling
         }
         
         print("\n📊 Data Summary:")
