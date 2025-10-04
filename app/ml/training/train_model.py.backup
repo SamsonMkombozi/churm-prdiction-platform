@@ -1,5 +1,5 @@
 """
-Updated Model Training Script with CRM Data - FIXED IMPORTS
+Updated Model Training Script with CRM Data
 app/ml/training/train_model.py
 
 Trains churn prediction model using data from Habari CRM
@@ -13,10 +13,6 @@ import numpy as np
 from datetime import datetime
 import json
 
-# ✅ FIX: Add XGBoost import
-import xgboost as xgb
-from xgboost import XGBClassifier
-
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
@@ -25,6 +21,8 @@ from app.extensions import db
 from app.models.company import Company
 from app.ml.models.churn_model import ChurnModel
 from app.ml.features.feature_engineering import FeatureEngineering
+
+from xgboost import XGBClassifier
 
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import (
@@ -54,7 +52,6 @@ class ModelTrainer:
         self.model = None
         self.feature_engineer = FeatureEngineering()
         self.metrics = {}
-        self.feature_names = []
         
     def load_data(self):
         """Load training data"""
@@ -144,7 +141,6 @@ class ModelTrainer:
         return True
     
     def train(self):
-        """Train the model"""
         try:
             print("\n" + "="*60)
             print("TRAINING MODEL")
@@ -153,23 +149,23 @@ class ModelTrainer:
             # Calculate class weights
             n_neg = (self.y_train == 0).sum()
             n_pos = (self.y_train == 1).sum()
-            scale_pos_weight = n_neg / n_pos if n_pos > 0 else 1
+            scale_pos_weight = n_neg / n_pos
             
             print(f"\n📊 Class balance:")
             print(f"   Negative (Active): {n_neg}")
             print(f"   Positive (Churned): {n_pos}")
             print(f"   Scale pos weight: {scale_pos_weight:.2f}")
             
-            # ✅ Initialize XGBoost model with correct import
+            # Initialize XGBoost model
             self.model = XGBClassifier(
                 n_estimators=100,
                 max_depth=6,
                 learning_rate=0.1,
                 scale_pos_weight=scale_pos_weight,
                 random_state=42,
-                use_label_encoder=False,
-                eval_metric='logloss',
-                objective='binary:logistic'
+                use_label_encoder=False,  # ✅ Important for newer versions
+                eval_metric='logloss',     # ✅ Prevents warnings
+                objective='binary:logistic'  # ✅ Explicitly set for binary classification
             )
             
             print("\n🚀 Training XGBoost model...")
@@ -193,7 +189,15 @@ class ModelTrainer:
             
             # Get predictions
             y_pred = self.model.predict(self.X_test)
-            y_pred_proba = self.model.predict_proba(self.X_test)[:, 1]
+            
+            # ✅ FIX: Handle both 1D and 2D probability outputs
+            y_pred_proba_raw = self.model.predict_proba(self.X_test)
+            
+            # Check if it's 2D (standard) or 1D (some XGBoost configurations)
+            if len(y_pred_proba_raw.shape) == 2:
+                y_pred_proba = y_pred_proba_raw[:, 1]  # Get probability of positive class
+            else:
+                y_pred_proba = y_pred_proba_raw  # Already 1D
             
             # Calculate metrics
             accuracy = accuracy_score(self.y_test, y_pred)
@@ -250,20 +254,6 @@ class ModelTrainer:
             traceback.print_exc()
             return False
     
-    def get_feature_importance(self):
-        """Get feature importance from model"""
-        try:
-            importance_scores = self.model.feature_importances_
-            
-            importance_df = pd.DataFrame({
-                'feature': self.feature_names,
-                'importance': importance_scores
-            }).sort_values('importance', ascending=False)
-            
-            return importance_df
-        except:
-            return None
-    
     def save_model(self):
         """Save trained model"""
         print("\n" + "="*60)
@@ -274,41 +264,33 @@ class ModelTrainer:
         save_dir = "app/ml/models/saved"
         os.makedirs(save_dir, exist_ok=True)
         
-        # Save using joblib
-        import joblib
-        model_path = os.path.join(save_dir, f"{self.model_name}.pkl")
+        # Save model
+        model_path = self.model.save(save_dir)
         
-        model_data = {
-            'model': self.model,
-            'feature_names': self.feature_names,
-            'version': f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-            'trained_at': datetime.now(),
-            'metrics': self.metrics,
-            'params': self.model.get_params()
-        }
-        
-        joblib.dump(model_data, model_path)
-        
-        print(f"✅ Model saved to: {model_path}")
-        
-        # Save metadata
-        metadata = {
-            'model_name': self.model_name,
-            'trained_at': datetime.now().isoformat(),
-            'training_data': self.data_file,
-            'training_samples': len(self.X_train),
-            'test_samples': len(self.X_test),
-            'features': self.feature_names,
-            'metrics': self.metrics
-        }
-        
-        metadata_path = os.path.join(save_dir, f"{self.model_name}_metadata.json")
-        with open(metadata_path, 'w') as f:
-            json.dump(metadata, f, indent=2, default=str)
-        
-        print(f"✅ Metadata saved to: {metadata_path}")
-        
-        return model_path
+        if model_path:
+            print(f"✅ Model saved to: {model_path}")
+            
+            # Save metadata
+            metadata = {
+                'model_name': self.model_name,
+                'trained_at': datetime.now().isoformat(),
+                'training_data': self.data_file,
+                'training_samples': len(self.X_train),
+                'test_samples': len(self.X_test),
+                'features': self.feature_names,
+                'metrics': self.metrics
+            }
+            
+            metadata_path = os.path.join(save_dir, f"{self.model_name}_metadata.json")
+            with open(metadata_path, 'w') as f:
+                json.dump(metadata, f, indent=2)
+            
+            print(f"✅ Metadata saved to: {metadata_path}")
+            
+            return model_path
+        else:
+            print("❌ Failed to save model")
+            return None
     
     def run_full_pipeline(self):
         """Run complete training pipeline"""
@@ -352,8 +334,8 @@ class ModelTrainer:
         print(f"   F1 Score:  {self.metrics['f1_score']:.2%}")
         
         print(f"\n🚀 Next Steps:")
-        print(f"   1. Test predictions: python test_predictions.py")
-        print(f"   2. Integrate into Flask app")
+        print(f"   1. Test predictions with Phase 6")
+        print(f"   2. Integrate into production system")
         print(f"   3. Monitor model performance")
         
         return True

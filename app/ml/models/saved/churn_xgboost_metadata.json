@@ -1,0 +1,173 @@
+{
+  "model_name": "churn_xgboost",
+  "trained_at": "2025-10-04T03:26:06.523882",
+  "training_data": "app/ml/data/training_data.csv",
+  "training_samples": 3626,
+  "test_samples": 907,
+  "features": [
+    "customer_phone",
+    "secondary_phone",
+    "customer_balance",
+    "status",
+    "balance",
+    "lead_id",
+    "region_id",
+    "is_ticket_sms",
+    "isonboarded",
+    "selfcare_pin",
+    "customer_special",
+    "recovered_qualified",
+    "cst_call",
+    "cst_winback_id",
+    "Update_Winbackonoffer",
+    "call_outcome",
+    "total_payments",
+    "days_since_last_payment",
+    "total_tickets",
+    "open_tickets",
+    "high_priority_tickets",
+    "days_since_last_ticket",
+    "tenure_days",
+    "tenure_months",
+    "is_active",
+    "balance_amount",
+    "payment_frequency",
+    "ticket_frequency",
+    "support_engagement_ratio"
+  ],
+  "metrics": {
+    "accuracy": 0.6538037486218302,
+    "precision": 0.8838174273858921,
+    "recall": 0.6228070175438597,
+    "f1_score": 0.7307032590051458,
+    "roc_auc": 0.7363372931581569,
+    "confusion_matrix": [
+      [
+        167,
+        56
+      ],
+      [
+        258,
+        426
+      ]
+    ],
+    "feature_importance": [
+      {
+        "feature": "status",
+        "importance": 0.7413147687911987
+      },
+      {
+        "feature": "is_ticket_sms",
+        "importance": 0.020478717982769012
+      },
+      {
+        "feature": "isonboarded",
+        "importance": 0.018598973751068115
+      },
+      {
+        "feature": "selfcare_pin",
+        "importance": 0.018415147438645363
+      },
+      {
+        "feature": "lead_id",
+        "importance": 0.018281683325767517
+      },
+      {
+        "feature": "region_id",
+        "importance": 0.017560455948114395
+      },
+      {
+        "feature": "tenure_days",
+        "importance": 0.017403317615389824
+      },
+      {
+        "feature": "cst_call",
+        "importance": 0.017392301931977272
+      },
+      {
+        "feature": "secondary_phone",
+        "importance": 0.017368949949741364
+      },
+      {
+        "feature": "balance",
+        "importance": 0.01713458076119423
+      },
+      {
+        "feature": "cst_winback_id",
+        "importance": 0.017050664871931076
+      },
+      {
+        "feature": "customer_phone",
+        "importance": 0.01676725037395954
+      },
+      {
+        "feature": "customer_balance",
+        "importance": 0.01668483577668667
+      },
+      {
+        "feature": "Update_Winbackonoffer",
+        "importance": 0.01663212850689888
+      },
+      {
+        "feature": "recovered_qualified",
+        "importance": 0.016286024823784828
+      },
+      {
+        "feature": "customer_special",
+        "importance": 0.012630186043679714
+      },
+      {
+        "feature": "call_outcome",
+        "importance": 0.0
+      },
+      {
+        "feature": "days_since_last_payment",
+        "importance": 0.0
+      },
+      {
+        "feature": "total_tickets",
+        "importance": 0.0
+      },
+      {
+        "feature": "open_tickets",
+        "importance": 0.0
+      },
+      {
+        "feature": "total_payments",
+        "importance": 0.0
+      },
+      {
+        "feature": "high_priority_tickets",
+        "importance": 0.0
+      },
+      {
+        "feature": "days_since_last_ticket",
+        "importance": 0.0
+      },
+      {
+        "feature": "tenure_months",
+        "importance": 0.0
+      },
+      {
+        "feature": "is_active",
+        "importance": 0.0
+      },
+      {
+        "feature": "balance_amount",
+        "importance": 0.0
+      },
+      {
+        "feature": "payment_frequency",
+        "importance": 0.0
+      },
+      {
+        "feature": "ticket_frequency",
+        "importance": 0.0
+      },
+      {
+        "feature": "support_engagement_ratio",
+        "importance": 0.0
+      }
+    ]
+  }
+}

@@ -1,5 +1,5 @@
 """
-Test Predictions with Trained Model
+Test Predictions with Trained Model - FIXED VERSION
 test_predictions.py
 
 This script tests the trained model with real CRM data
@@ -8,7 +8,7 @@ This script tests the trained model with real CRM data
 import os
 import sys
 import pandas as pd
-import requests
+import numpy as np
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
@@ -32,13 +32,22 @@ def test_with_sample_customers():
         return False
     
     print(f"\n📦 Loading model from: {model_path}")
-    model = ChurnModel(model_name='churn_xgboost')
     
-    if not model.load("app/ml/models/saved"):
+    # ✅ FIX: Use model_path instead of model_name
+    model = ChurnModel(model_path=model_path)
+    
+    if not model.load(model_path):
         print("❌ Failed to load model")
         return False
     
     print("✅ Model loaded successfully")
+    
+    # Get model info
+    info = model.get_model_info()
+    print(f"\n📊 Model Info:")
+    print(f"   Version: {info.get('version')}")
+    print(f"   Trained: {info.get('trained_at')}")
+    print(f"   Features: {info.get('num_features')}")
     
     # Load training data to get sample customers
     data_file = "app/ml/data/training_data.csv"
@@ -56,7 +65,9 @@ def test_with_sample_customers():
     exclude_cols = [
         'customer_id', 'id', 'churned', 'churn_score',
         'customer_name', 'name', 'email', 'phone', 'address',
-        'signup_date', 'last_payment_date', 'last_ticket_date'
+        'signup_date', 'last_payment_date', 'last_ticket_date',
+        'customer_email', 'secondary_email', 'created_at', 'updated_at',
+        'disconnection_date', 'churned_date', 'date_installed'
     ]
     
     feature_cols = [
@@ -125,7 +136,7 @@ def test_with_sample_customers():
     
     if len(high_risk_customers) > 0:
         for idx, row in high_risk_customers.iterrows():
-            customer_id = row.get('customer_id', 'N/A')
+            customer_id = row.get('id', row.get('customer_id', 'N/A'))
             customer_name = row.get('customer_name', 'N/A')
             prob = row['churn_probability']
             
@@ -138,8 +149,12 @@ def test_with_sample_customers():
                 print(f"   Total Tickets: {int(row['total_tickets'])}")
             if 'total_payments' in row:
                 print(f"   Total Payments: {int(row['total_payments'])}")
-            if 'days_since_last_payment' in row:
+            if 'days_since_last_payment' in row and row['days_since_last_payment'] < 999:
                 print(f"   Days Since Last Payment: {int(row['days_since_last_payment'])}")
+            if 'tenure_months' in row:
+                print(f"   Tenure: {int(row['tenure_months'])} months")
+            if 'balance_amount' in row:
+                print(f"   Balance: ${row['balance_amount']:.2f}")
     else:
         print("✅ No high-risk customers found!")
     
@@ -153,7 +168,7 @@ def test_with_sample_customers():
     ).head(5)
     
     for idx, row in low_risk_customers.iterrows():
-        customer_id = row.get('customer_id', 'N/A')
+        customer_id = row.get('id', row.get('customer_id', 'N/A'))
         customer_name = row.get('customer_name', 'N/A')
         prob = row['churn_probability']
         
@@ -161,20 +176,43 @@ def test_with_sample_customers():
         print(f"   Churn Probability: {prob:.1%}")
         print(f"   Risk: {row['risk_category']}")
     
+    # Calculate accuracy if we have actual labels
+    if 'churned' in df.columns:
+        from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+        
+        actual = df['churned']
+        predicted = df['churn_prediction']
+        
+        accuracy = accuracy_score(actual, predicted)
+        precision = precision_score(actual, predicted, zero_division=0)
+        recall = recall_score(actual, predicted, zero_division=0)
+        f1 = f1_score(actual, predicted, zero_division=0)
+        
+        print("\n" + "="*60)
+        print("MODEL VALIDATION (on full dataset)")
+        print("="*60)
+        print(f"   Accuracy:  {accuracy:.1%}")
+        print(f"   Precision: {precision:.1%}")
+        print(f"   Recall:    {recall:.1%}")
+        print(f"   F1 Score:  {f1:.1%}")
+    
     # Save predictions
     output_file = "app/ml/data/predictions.csv"
     
     # Select relevant columns for output
-    output_cols = ['customer_id', 'churn_prediction', 'churn_probability', 'risk_category']
+    output_cols = ['id', 'churn_prediction', 'churn_probability', 'risk_category']
     if 'customer_name' in df.columns:
         output_cols.insert(1, 'customer_name')
     
     # Add key features
     key_features = ['total_payments', 'total_tickets', 'tenure_months', 
-                   'days_since_last_payment', 'payment_frequency']
+                   'days_since_last_payment', 'payment_frequency', 'status']
     for feat in key_features:
         if feat in df.columns:
             output_cols.append(feat)
+    
+    # Only include columns that exist
+    output_cols = [col for col in output_cols if col in df.columns]
     
     df[output_cols].to_csv(output_file, index=False)
     
@@ -193,7 +231,7 @@ def test_with_sample_customers():
     if high_risk > 0:
         print(f"   1. Review high-risk customers immediately")
         print(f"   2. Implement retention strategies")
-        print(f"   3. Contact customers with no recent payments")
+        print(f"   3. Contact customers with overdue balances")
     else:
         print(f"   1. Continue monitoring customer health")
         print(f"   2. Maintain good service quality")
@@ -209,28 +247,47 @@ def test_single_customer():
     print("="*60)
     
     # Load model
-    model = ChurnModel(model_name='churn_xgboost')
+    model_path = "app/ml/models/saved/churn_xgboost.pkl"
+    model = ChurnModel(model_path=model_path)
     
-    if not model.load("app/ml/models/saved"):
+    if not model.load(model_path):
         print("❌ Failed to load model")
         return False
     
     print("✅ Model loaded")
     
-    # Create sample customer data
+    # Create sample customer data matching actual features
     print("\n📝 Creating test customer profile...")
     
     sample_customer = pd.DataFrame([{
-        'tenure_months': 12,
+        'customer_phone': 0,
+        'secondary_phone': 0,
+        'customer_balance': 0,
+        'status': 1,  # Active
+        'balance': -500,  # Has debt
+        'lead_id': 0,
+        'region_id': 1,
+        'is_ticket_sms': 0,
+        'isonboarded': 1,
+        'selfcare_pin': 0,
+        'customer_special': 0,
+        'recovered_qualified': 0,
+        'cst_call': 0,
+        'cst_winback_id': 0,
+        'Update_Winbackonoffer': 0,
+        'call_outcome': 0,
         'total_payments': 5,
-        'total_tickets': 8,
         'days_since_last_payment': 90,
+        'total_tickets': 8,
+        'open_tickets': 3,
+        'high_priority_tickets': 2,
+        'days_since_last_ticket': 15,
+        'tenure_days': 365,
+        'tenure_months': 12,
+        'is_active': 1,
+        'balance_amount': -500,
         'payment_frequency': 0.4,
         'ticket_frequency': 0.7,
-        'is_active': 1,
-        'open_tickets': 3,
-        'total_payment_amount': 500.0,
-        'avg_payment_amount': 100.0,
         'support_engagement_ratio': 1.6
     }])
     
@@ -248,6 +305,12 @@ def test_single_customer():
     print(f"   Will Churn: {'YES' if prediction == 1 else 'NO'}")
     print(f"   Churn Probability: {probability:.1%}")
     print(f"   Risk Category: {risk}")
+    
+    if risk == 'HIGH':
+        print(f"\n⚠️  Action Required:")
+        print(f"   - Contact customer immediately")
+        print(f"   - Review outstanding balance")
+        print(f"   - Address open support tickets")
     
     return True
 
@@ -272,10 +335,17 @@ def main():
     print("✅ ALL TESTS COMPLETE!")
     print("="*60)
     
+    print("\n📋 Files Created:")
+    print("   - app/ml/data/predictions.csv")
+    
+    print("\n🚀 Next Steps:")
+    print("   1. Review predictions in app/ml/data/predictions.csv")
+    print("   2. Start Flask app: python3 run.py")
+    print("   3. View predictions in the web interface")
+    
     return True
 
 
 if __name__ == '__main__':
     success = main()
     sys.exit(0 if success else 1)
-    
