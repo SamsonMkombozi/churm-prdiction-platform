@@ -1,0 +1,314 @@
+{% extends 'base.html' %}
+
+{% block title %}Predictions Dashboard - {{ company.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">
+            <i class="fas fa-brain me-2"></i>Churn Predictions Dashboard
+        </h1>
+        <div class="btn-toolbar">
+            {% if current_user.is_manager() %}
+            <button type="button" class="btn btn-primary me-2" id="runPredictionsBtn">
+                <i class="fas fa-play me-2"></i>Run Predictions
+            </button>
+            {% endif %}
+            <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total Predictions
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ stats.total_predictions|number }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-brain fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                High Risk
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ stats.high_risk|number }}
+                            </div>
+                            <small class="text-danger">
+                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                Immediate attention needed
+                            </small>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Medium Risk
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ stats.medium_risk|number }}
+                            </div>
+                            <small class="text-warning">
+                                <i class="fas fa-eye me-1"></i>Monitor closely
+                            </small>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Low Risk
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ stats.low_risk|number }}
+                            </div>
+                            <small class="text-success">
+                                <i class="fas fa-check-circle me-1"></i>Healthy customers
+                            </small>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- High Risk Customers Table -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>High Risk Customers
+            </h6>
+            <a href="{{ url_for('prediction.high_risk_customers') }}" class="btn btn-sm btn-danger">
+                View All <i class="fas fa-arrow-right ms-1"></i>
+            </a>
+        </div>
+        <div class="card-body">
+            {% if high_risk_customers %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Customer</th>
+                            <th>Churn Probability</th>
+                            <th>Risk Level</th>
+                            <th>Tenure</th>
+                            <th>Last Prediction</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for customer, prediction in high_risk_customers %}
+                        <tr>
+                            <td>
+                                <strong>{{ customer.customer_name }}</strong><br>
+                                <small class="text-muted">{{ customer.email }}</small>
+                            </td>
+                            <td>
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar bg-danger" role="progressbar" 
+                                         style="width: {{ prediction.churn_probability * 100 }}%">
+                                        {{ (prediction.churn_probability * 100)|round(1) }}%
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-danger">HIGH RISK</span>
+                            </td>
+                            <td>{{ customer.tenure_months }} months</td>
+                            <td>{{ prediction.predicted_at|datetime }}</td>
+                            <td>
+                                <a href="{{ url_for('prediction.customer_prediction', customer_id=customer.id) }}" 
+                                   class="btn btn-sm btn-primary">
+                                    <i class="fas fa-eye"></i> View
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle me-2"></i>
+                <strong>Great news!</strong> No high-risk customers at the moment.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Model Information -->
+    <div class="card shadow">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-info-circle me-2"></i>Model Information
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <dl class="row">
+                        <dt class="col-sm-4">Model Version:</dt>
+                        <dd class="col-sm-8"><code>v1.0</code></dd>
+                        
+                        <dt class="col-sm-4">Algorithm:</dt>
+                        <dd class="col-sm-8">XGBoost Classifier</dd>
+                        
+                        <dt class="col-sm-4">Last Updated:</dt>
+                        <dd class="col-sm-8">{{ company.last_sync_at|datetime if company.last_sync_at else 'Never' }}</dd>
+                    </dl>
+                </div>
+                <div class="col-md-6">
+                    <dl class="row">
+                        <dt class="col-sm-4">High Threshold:</dt>
+                        <dd class="col-sm-8">{{ company.get_setting('prediction_threshold_high', 0.7) * 100 }}%</dd>
+                        
+                        <dt class="col-sm-4">Medium Threshold:</dt>
+                        <dd class="col-sm-8">{{ company.get_setting('prediction_threshold_medium', 0.4) * 100 }}%</dd>
+                        
+                        <dt class="col-sm-4">Total Customers:</dt>
+                        <dd class="col-sm-8">{{ stats.total_customers|number }}</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Run Predictions Modal -->
+<div class="modal fade" id="runPredictionsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-brain me-2"></i>Run Churn Predictions
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="predictionProgress" class="d-none">
+                    <div class="text-center mb-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Running predictions...</span>
+                        </div>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 100%"></div>
+                    </div>
+                    <p class="text-center mt-3 mb-0">
+                        <small class="text-muted">Analyzing customer data and calculating churn probabilities...</small>
+                    </p>
+                </div>
+                <div id="predictionForm">
+                    <p>This will run churn predictions for all customers in your database.</p>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Note:</strong> This process may take a few minutes depending on the number of customers.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmRunPredictions">
+                    <i class="fas fa-play me-2"></i>Run Predictions
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const runBtn = document.getElementById('runPredictionsBtn');
+    const modal = new bootstrap.Modal(document.getElementById('runPredictionsModal'));
+    const confirmBtn = document.getElementById('confirmRunPredictions');
+    const progressDiv = document.getElementById('predictionProgress');
+    const formDiv = document.getElementById('predictionForm');
+    
+    if (runBtn) {
+        runBtn.addEventListener('click', function() {
+            modal.show();
+        });
+    }
+    
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', function() {
+            // Show progress
+            formDiv.classList.add('d-none');
+            progressDiv.classList.remove('d-none');
+            confirmBtn.disabled = true;
+            
+            // Make API call
+            fetch('{{ url_for("prediction.run_predictions") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success and reload
+                    alert(data.message);
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                    formDiv.classList.remove('d-none');
+                    progressDiv.classList.add('d-none');
+                    confirmBtn.disabled = false;
+                }
+            })
+            .catch(error => {
+                alert('Error running predictions: ' + error);
+                formDiv.classList.remove('d-none');
+                progressDiv.classList.add('d-none');
+                confirmBtn.disabled = false;
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

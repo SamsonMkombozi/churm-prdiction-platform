@@ -1,0 +1,217 @@
+{% extends 'base.html' %}
+
+{% block title %}High Risk Customers - {{ company.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">
+            <i class="fas fa-exclamation-triangle text-danger me-2"></i>High Risk Customers
+        </h1>
+        <div class="btn-toolbar">
+            <button type="button" class="btn btn-danger me-2">
+                <i class="fas fa-download me-2"></i>Export List
+            </button>
+            <a href="{{ url_for('prediction.dashboard') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Alert Box -->
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <h5 class="alert-heading">
+            <i class="fas fa-exclamation-circle me-2"></i>Attention Required
+        </h5>
+        <p class="mb-0">
+            These customers have a <strong>high probability of churning</strong> (≥70%). 
+            Immediate action is recommended to retain them.
+        </p>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <!-- Filters -->
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('prediction.high_risk_customers') }}" class="row g-3">
+                <div class="col-md-3">
+                    <label for="sort" class="form-label">Sort By</label>
+                    <select name="sort" id="sort" class="form-select">
+                        <option value="probability">Churn Probability (High to Low)</option>
+                        <option value="tenure">Tenure (Short to Long)</option>
+                        <option value="balance">Outstanding Balance (High to Low)</option>
+                        <option value="recent">Recently Added</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="min_tenure" class="form-label">Min Tenure (months)</label>
+                    <input type="number" name="min_tenure" id="min_tenure" class="form-control" placeholder="0">
+                </div>
+                <div class="col-md-3">
+                    <label for="search" class="form-label">Search Customer</label>
+                    <input type="text" name="search" id="search" class="form-control" placeholder="Name or email">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-filter me-2"></i>Apply Filters
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- High Risk Customers Table -->
+    <div class="card shadow">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-danger">
+                Showing {{ pagination.items|length }} of {{ pagination.total }} high-risk customers
+            </h6>
+        </div>
+        <div class="card-body">
+            {% if pagination.items %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Customer</th>
+                            <th>Churn Probability</th>
+                            <th>Tenure</th>
+                            <th>Monthly Charges</th>
+                            <th>Balance</th>
+                            <th>Tickets</th>
+                            <th>Last Payment</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in pagination.items %}
+                        {% set customer = item[0] %}
+                        {% set prediction = item[1] %}
+                        <tr>
+                            <td>{{ loop.index + (pagination.page - 1) * pagination.per_page }}</td>
+                            <td>
+                                <div>
+                                    <strong>{{ customer.customer_name }}</strong>
+                                    {% if customer.email %}
+                                    <br><small class="text-muted">{{ customer.email }}</small>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="progress flex-grow-1 me-2" style="height: 20px; min-width: 100px;">
+                                        <div class="progress-bar bg-danger" role="progressbar" 
+                                             style="width: {{ prediction.churn_probability * 100 }}%">
+                                            {{ (prediction.churn_probability * 100)|round(1) }}%
+                                        </div>
+                                    </div>
+                                    <span class="badge bg-danger">HIGH</span>
+                                </div>
+                            </td>
+                            <td>{{ customer.tenure_months }} months</td>
+                            <td>{{ customer.monthly_charges|currency }}</td>
+                            <td>
+                                <span class="text-{{ 'danger' if customer.outstanding_balance > 0 else 'success' }}">
+                                    {{ customer.outstanding_balance|currency }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge bg-info">{{ customer.total_tickets }}</span>
+                            </td>
+                            <td>
+                                {% if customer.last_payment_date %}
+                                    {{ customer.last_payment_date|date }}
+                                {% else %}
+                                    <span class="text-muted">Never</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('prediction.customer_prediction', customer_id=customer.id) }}" 
+                                   class="btn btn-sm btn-primary">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{{ url_for('crm.customers', id=customer.id) }}" 
+                                   class="btn btn-sm btn-secondary">
+                                    <i class="fas fa-user"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if pagination.pages > 1 %}
+            <nav aria-label="Page navigation" class="mt-3">
+                <ul class="pagination justify-content-center">
+                    <li class="page-item {{ 'disabled' if not pagination.has_prev }}">
+                        <a class="page-link" href="{{ url_for('prediction.high_risk_customers', page=pagination.prev_num) if pagination.has_prev else '#' }}">
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </a>
+                    </li>
+                    
+                    {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                        {% if page_num %}
+                            <li class="page-item {{ 'active' if page_num == pagination.page }}">
+                                <a class="page-link" href="{{ url_for('prediction.high_risk_customers', page=page_num) }}">
+                                    {{ page_num }}
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    <li class="page-item {{ 'disabled' if not pagination.has_next }}">
+                        <a class="page-link" href="{{ url_for('prediction.high_risk_customers', page=pagination.next_num) if pagination.has_next else '#' }}">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            {% endif %}
+
+            {% else %}
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle me-2"></i>
+                <strong>Great news!</strong> No high-risk customers found.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Action Recommendations -->
+    <div class="card shadow mt-4 border-danger">
+        <div class="card-header bg-danger text-white">
+            <h6 class="m-0 font-weight-bold">
+                <i class="fas fa-lightbulb me-2"></i>Recommended Actions
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="text-danger">Immediate Actions:</h6>
+                    <ul>
+                        <li>Contact high-risk customers within 24-48 hours</li>
+                        <li>Review and resolve any outstanding support tickets</li>
+                        <li>Address billing issues and outstanding balances</li>
+                        <li>Offer personalized retention incentives</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="text-danger">Long-term Strategies:</h6>
+                    <ul>
+                        <li>Schedule regular check-ins with at-risk customers</li>
+                        <li>Improve service quality and response times</li>
+                        <li>Implement loyalty programs for long-term customers</li>
+                        <li>Monitor customer satisfaction metrics</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

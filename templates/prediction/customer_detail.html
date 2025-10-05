@@ -1,0 +1,296 @@
+{% extends 'base.html' %}
+
+{% block title %}Customer Prediction - {{ customer.customer_name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">
+            <i class="fas fa-user-chart me-2"></i>{{ customer.customer_name }}
+        </h1>
+        <div class="btn-toolbar">
+            <a href="{{ url_for('prediction.dashboard') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Predictions
+            </a>
+        </div>
+    </div>
+
+    <!-- Customer Overview -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-info-circle me-2"></i>Customer Information
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-5">Email:</dt>
+                                <dd class="col-sm-7">{{ customer.email or 'N/A' }}</dd>
+                                
+                                <dt class="col-sm-5">Phone:</dt>
+                                <dd class="col-sm-7">{{ customer.phone or 'N/A' }}</dd>
+                                
+                                <dt class="col-sm-5">Status:</dt>
+                                <dd class="col-sm-7">
+                                    <span class="badge bg-{{ 'success' if customer.status == 'active' else 'secondary' }}">
+                                        {{ customer.status|upper }}
+                                    </span>
+                                </dd>
+                                
+                                <dt class="col-sm-5">Tenure:</dt>
+                                <dd class="col-sm-7">{{ customer.tenure_months }} months</dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-5">Service Type:</dt>
+                                <dd class="col-sm-7">{{ customer.service_type or 'N/A' }}</dd>
+                                
+                                <dt class="col-sm-5">Monthly Charges:</dt>
+                                <dd class="col-sm-7">{{ customer.monthly_charges|currency }}</dd>
+                                
+                                <dt class="col-sm-5">Balance:</dt>
+                                <dd class="col-sm-7">
+                                    <span class="text-{{ 'danger' if customer.outstanding_balance > 0 else 'success' }}">
+                                        {{ customer.outstanding_balance|currency }}
+                                    </span>
+                                </dd>
+                                
+                                <dt class="col-sm-5">Signup Date:</dt>
+                                <dd class="col-sm-7">{{ customer.signup_date|date if customer.signup_date else 'N/A' }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Churn Risk Card -->
+        <div class="col-md-4">
+            <div class="card shadow border-left-{{ 'danger' if prediction.churn_risk == 'high' else 'warning' if prediction.churn_risk == 'medium' else 'success' }}">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-{{ 'danger' if prediction.churn_risk == 'high' else 'warning' if prediction.churn_risk == 'medium' else 'success' }}">
+                        <i class="fas fa-exclamation-triangle me-2"></i>Churn Risk Assessment
+                    </h6>
+                </div>
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <h1 class="display-4 text-{{ 'danger' if prediction.churn_risk == 'high' else 'warning' if prediction.churn_risk == 'medium' else 'success' }}">
+                            {{ (prediction.churn_probability * 100)|round(1) }}%
+                        </h1>
+                        <p class="text-muted mb-0">Churn Probability</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <span class="badge bg-{{ 'danger' if prediction.churn_risk == 'high' else 'warning' if prediction.churn_risk == 'medium' else 'success' }} fs-5 px-3 py-2">
+                            {{ prediction.churn_risk|upper }} RISK
+                        </span>
+                    </div>
+                    
+                    <div class="progress mb-3" style="height: 25px;">
+                        <div class="progress-bar bg-{{ 'danger' if prediction.churn_risk == 'high' else 'warning' if prediction.churn_risk == 'medium' else 'success' }}" 
+                             role="progressbar" 
+                             style="width: {{ prediction.churn_probability * 100 }}%">
+                            {{ (prediction.churn_probability * 100)|round(1) }}%
+                        </div>
+                    </div>
+                    
+                    <p class="small text-muted mb-0">
+                        <i class="fas fa-clock me-1"></i>
+                        Last updated: {{ prediction.predicted_at|datetime }}
+                    </p>
+                </div>
+            </div>
+
+            {% if prediction.churn_risk == 'high' %}
+            <div class="alert alert-danger mt-3">
+                <h6 class="alert-heading">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Action Required
+                </h6>
+                <ul class="mb-0 small">
+                    <li>Contact customer immediately</li>
+                    <li>Review outstanding tickets</li>
+                    <li>Offer retention incentives</li>
+                    <li>Schedule follow-up call</li>
+                </ul>
+            </div>
+            {% elif prediction.churn_risk == 'medium' %}
+            <div class="alert alert-warning mt-3">
+                <h6 class="alert-heading">
+                    <i class="fas fa-eye me-2"></i>Monitor Closely
+                </h6>
+                <ul class="mb-0 small">
+                    <li>Increase engagement frequency</li>
+                    <li>Monitor service quality</li>
+                    <li>Check for service issues</li>
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Activity Metrics -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card shadow h-100">
+                <div class="card-header py-3 bg-info text-white">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-ticket-alt me-2"></i>Support Tickets
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>Total Tickets:</span>
+                        <strong>{{ customer.total_tickets }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>Last Ticket:</span>
+                        <strong>{{ customer.last_ticket_date|date if customer.last_ticket_date else 'Never' }}</strong>
+                    </div>
+                    
+                    {% if tickets %}
+                    <hr>
+                    <h6 class="small font-weight-bold">Recent Tickets</h6>
+                    <div class="list-group list-group-flush">
+                        {% for ticket in tickets[:3] %}
+                        <div class="list-group-item px-0 py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small>{{ ticket.title[:30] }}...</small>
+                                <span class="badge bg-{{ 'danger' if ticket.status == 'open' else 'success' }}">
+                                    {{ ticket.status }}
+                                </span>
+                            </div>
+                            <small class="text-muted">{{ ticket.created_at|datetime }}</small>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow h-100">
+                <div class="card-header py-3 bg-success text-white">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-dollar-sign me-2"></i>Payment History
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>Total Payments:</span>
+                        <strong>{{ customer.total_payments }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>Last Payment:</span>
+                        <strong>{{ customer.last_payment_date|date if customer.last_payment_date else 'Never' }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>Total Paid:</span>
+                        <strong>{{ customer.total_charges|currency }}</strong>
+                    </div>
+                    
+                    {% if payments %}
+                    <hr>
+                    <h6 class="small font-weight-bold">Recent Payments</h6>
+                    <div class="list-group list-group-flush">
+                        {% for payment in payments[:3] %}
+                        <div class="list-group-item px-0 py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small>{{ payment.amount|currency }}</small>
+                                <span class="badge bg-{{ 'success' if payment.status == 'completed' else 'warning' }}">
+                                    {{ payment.status }}
+                                </span>
+                            </div>
+                            <small class="text-muted">{{ payment.payment_date|datetime }}</small>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow h-100">
+                <div class="card-header py-3 bg-primary text-white">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-chart-line me-2"></i>Engagement Metrics
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span>Customer Since:</span>
+                        <strong>{{ customer.signup_date|date if customer.signup_date else 'N/A' }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span>Tenure:</span>
+                        <strong>{{ customer.tenure_months }} months</strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span>Service Type:</span>
+                        <strong>{{ customer.service_type or 'N/A' }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span>Monthly Charges:</span>
+                        <strong>{{ customer.monthly_charges|currency }}</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prediction History -->
+    {% if prediction_history %}
+    <div class="card shadow">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-history me-2"></i>Prediction History
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Churn Probability</th>
+                            <th>Risk Level</th>
+                            <th>Will Churn</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pred in prediction_history %}
+                        <tr>
+                            <td>{{ pred.predicted_at|datetime }}</td>
+                            <td>
+                                <div class="progress" style="height: 20px; width: 150px;">
+                                    <div class="progress-bar bg-{{ 'danger' if pred.churn_risk == 'high' else 'warning' if pred.churn_risk == 'medium' else 'success' }}" 
+                                         role="progressbar" 
+                                         style="width: {{ pred.churn_probability * 100 }}%">
+                                        {{ (pred.churn_probability * 100)|round(1) }}%
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ 'danger' if pred.churn_risk == 'high' else 'warning' if pred.churn_risk == 'medium' else 'success' }}">
+                                    {{ pred.churn_risk|upper }}
+                                </span>
+                            </td>
+                            <td>
+                                <i class="fas fa-{{ 'times-circle text-danger' if pred.will_churn else 'check-circle text-success' }}"></i>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
