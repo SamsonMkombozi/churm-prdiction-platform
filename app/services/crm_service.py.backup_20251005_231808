@@ -248,7 +248,9 @@ class CRMService:
     def sync_tickets(self) -> Dict:
         """
         Sync support tickets from CRM to database
-        ✅ FIXED: Handles missing customers gracefully
+        
+        Returns:
+            Dictionary with sync results
         """
         from app.repositories.ticket_repository import TicketRepository
         
@@ -260,20 +262,15 @@ class CRMService:
             
             created = 0
             updated = 0
-            skipped = 0  # ✅ NEW: Track skipped tickets
             errors = 0
             
             for ticket_data in tickets_data:
                 try:
-                    result = repo.create_or_update(ticket_data)
-                    
-                    # ✅ FIX: Handle None return (skipped due to missing customer)
-                    if result is True:
+                    is_new = repo.create_or_update(ticket_data)
+                    if is_new:
                         created += 1
-                    elif result is False:
+                    else:
                         updated += 1
-                    elif result is None:
-                        skipped += 1
                         
                 except Exception as e:
                     logger.error(f"Failed to sync ticket {ticket_data.get('id')}: {e}")
@@ -282,23 +279,12 @@ class CRMService:
             # Commit all changes
             db.session.commit()
             
-            # Build message
-            message = f"Synced {created} new, {updated} updated"
-            if skipped > 0:
-                message += f", {skipped} skipped (customers not found)"
-            if errors > 0:
-                message += f", {errors} errors"
-            
-            logger.info(message)
-            
             return {
                 'success': True,
                 'created': created,
                 'updated': updated,
-                'skipped': skipped,
                 'errors': errors,
-                'total': len(tickets_data),
-                'message': message
+                'total': len(tickets_data)
             }
             
         except Exception as e:

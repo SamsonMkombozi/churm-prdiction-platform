@@ -1,8 +1,8 @@
 """
-Ticket Repository - FINAL FIXED VERSION
+Ticket Repository - FIXED VERSION
 app/repositories/ticket_repository.py
 
-Uses 'customer_no' field for customer reference
+Handles missing customer IDs gracefully
 """
 from datetime import datetime
 from typing import List, Optional, Dict
@@ -52,14 +52,14 @@ class TicketRepository:
     def create(self, ticket_data: Dict) -> Optional[Ticket]:
         """
         Create new ticket from dictionary
-        ✅ FIXED: Uses 'customer_no' field for customer reference
+        ✅ FIXED: Returns None if customer not found
         """
-        # ✅ FIX: Use 'customer_no' field (this is how your CRM stores customer ID)
+        # Try multiple possible field names for customer ID
         customer_crm_id = (
-            ticket_data.get('customer_no') or      # Primary field in your CRM
-            ticket_data.get('customer_id') or      # Standard fallback
+            ticket_data.get('customer_id') or 
             ticket_data.get('customerId') or 
-            ticket_data.get('cust_id')
+            ticket_data.get('cust_id') or
+            ticket_data.get('customer')
         )
         
         customer = None
@@ -78,33 +78,28 @@ class TicketRepository:
         else:
             logger.warning(
                 f"Skipping ticket {ticket_data.get('id')} - "
-                f"No customer_no provided"
+                f"No customer_id provided"
             )
             return None
-        
-        # Parse dates
-        created_at = self._parse_date(ticket_data.get('created_at'))
-        resolved_at = self._parse_date(ticket_data.get('outcome_date'))
         
         ticket = Ticket(
             company_id=self.company_id,
             customer_id=customer.id,  # Now guaranteed to be valid
-            crm_ticket_id=str(ticket_data.get('id')),
-            ticket_number=ticket_data.get('id'),  # Use ID as ticket number if not provided
-            title=ticket_data.get('subject'),
-            description=ticket_data.get('message'),
-            category=ticket_data.get('category_id'),
-            priority=ticket_data.get('priority', 'medium').lower(),
-            status=self._normalize_status(ticket_data.get('status', 'open')),
-            resolution=ticket_data.get('solutions_checklist'),
-            resolved_at=resolved_at,
-            assigned_to=str(ticket_data.get('assigned_to')) if ticket_data.get('assigned_to') else None,
-            department=str(ticket_data.get('department_id')) if ticket_data.get('department_id') else None,
-            created_at=created_at or datetime.utcnow(),
+            crm_ticket_id=ticket_data.get('id'),
+            ticket_number=ticket_data.get('ticket_number'),
+            title=ticket_data.get('title'),
+            description=ticket_data.get('description'),
+            category=ticket_data.get('category'),
+            priority=ticket_data.get('priority', 'medium'),
+            status=ticket_data.get('status', 'open'),
+            resolution=ticket_data.get('resolution'),
+            resolved_at=self._parse_date(ticket_data.get('resolved_at')),
+            assigned_to=ticket_data.get('assigned_to'),
+            department=ticket_data.get('department'),
             synced_at=datetime.utcnow()
         )
         
-        if ticket.resolved_at and ticket.created_at:
+        if ticket.resolved_at:
             ticket.calculate_resolution_time()
         
         db.session.add(ticket)
@@ -112,17 +107,18 @@ class TicketRepository:
     
     def update(self, ticket: Ticket, ticket_data: Dict) -> Ticket:
         """Update existing ticket"""
-        ticket.title = ticket_data.get('subject', ticket.title)
-        ticket.description = ticket_data.get('message', ticket.description)
-        ticket.category = ticket_data.get('category_id', ticket.category)
-        ticket.priority = ticket_data.get('priority', ticket.priority).lower()
-        ticket.status = self._normalize_status(ticket_data.get('status', ticket.status))
-        ticket.resolution = ticket_data.get('solutions_checklist', ticket.resolution)
-        ticket.assigned_to = str(ticket_data.get('assigned_to')) if ticket_data.get('assigned_to') else ticket.assigned_to
-        ticket.department = str(ticket_data.get('department_id')) if ticket_data.get('department_id') else ticket.department
+        ticket.ticket_number = ticket_data.get('ticket_number', ticket.ticket_number)
+        ticket.title = ticket_data.get('title', ticket.title)
+        ticket.description = ticket_data.get('description', ticket.description)
+        ticket.category = ticket_data.get('category', ticket.category)
+        ticket.priority = ticket_data.get('priority', ticket.priority)
+        ticket.status = ticket_data.get('status', ticket.status)
+        ticket.resolution = ticket_data.get('resolution', ticket.resolution)
+        ticket.assigned_to = ticket_data.get('assigned_to', ticket.assigned_to)
+        ticket.department = ticket_data.get('department', ticket.department)
         
-        if 'outcome_date' in ticket_data:
-            ticket.resolved_at = self._parse_date(ticket_data['outcome_date'])
+        if 'resolved_at' in ticket_data:
+            ticket.resolved_at = self._parse_date(ticket_data['resolved_at'])
             if ticket.resolved_at:
                 ticket.calculate_resolution_time()
         
@@ -133,7 +129,7 @@ class TicketRepository:
     def create_or_update(self, ticket_data: Dict) -> Optional[bool]:
         """
         Create new ticket or update existing one
-        Returns: True if created, False if updated, None if skipped
+        ✅ FIXED: Returns None if ticket skipped
         """
         crm_id = ticket_data.get('id')
         
@@ -184,26 +180,4 @@ class TicketRepository:
         try:
             return datetime.fromisoformat(date_string.replace('Z', '+00:00'))
         except (ValueError, AttributeError):
-            try:
-                # Handle format like "2024-10-01 09:34:50"
-                return datetime.strptime(date_string, '%Y-%m-%d %H:%M:%S')
-            except:
-                return None
-    
-    @staticmethod
-    def _normalize_status(status: str) -> str:
-        """Normalize ticket status to standard values"""
-        if not status:
-            return 'open'
-        
-        status_lower = status.lower()
-        
-        # Map CRM statuses to standard statuses
-        if status_lower in ['closed', 'resolved', 'completed']:
-            return 'closed'
-        elif status_lower in ['open', 'new']:
-            return 'open'
-        elif status_lower in ['in progress', 'in_progress', 'working']:
-            return 'in_progress'
-        else:
-            return 'open'  # Default
+            return None
