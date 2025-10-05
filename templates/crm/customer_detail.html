@@ -1,0 +1,266 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ customer.customer_name }} - Customer Details{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">
+            <i class="fas fa-user me-2"></i>{{ customer.customer_name }}
+        </h1>
+        <div class="btn-toolbar">
+            <a href="{{ url_for('crm.customers') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Customers
+            </a>
+        </div>
+    </div>
+
+    <!-- Customer Overview -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-info-circle me-2"></i>Customer Information
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-5">Customer ID:</dt>
+                                <dd class="col-sm-7">{{ customer.crm_customer_id or customer.id }}</dd>
+                                
+                                <dt class="col-sm-5">Email:</dt>
+                                <dd class="col-sm-7">{{ customer.email or 'N/A' }}</dd>
+                                
+                                <dt class="col-sm-5">Phone:</dt>
+                                <dd class="col-sm-7">{{ customer.phone or 'N/A' }}</dd>
+                                
+                                <dt class="col-sm-5">Status:</dt>
+                                <dd class="col-sm-7">
+                                    <span class="badge bg-{{ 'success' if customer.status == 'active' else 'secondary' }}">
+                                        {{ customer.status|upper }}
+                                    </span>
+                                </dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-5">Service Type:</dt>
+                                <dd class="col-sm-7">{{ customer.service_type or 'N/A' }}</dd>
+                                
+                                <dt class="col-sm-5">Connection:</dt>
+                                <dd class="col-sm-7">{{ customer.connection_type or 'N/A' }}</dd>
+                                
+                                <dt class="col-sm-5">Account Type:</dt>
+                                <dd class="col-sm-7">{{ customer.account_type or 'N/A' }}</dd>
+                                
+                                <dt class="col-sm-5">Signup Date:</dt>
+                                <dd class="col-sm-7">{{ customer.signup_date|date if customer.signup_date else 'N/A' }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                    
+                    {% if customer.address %}
+                    <hr>
+                    <dl class="row mb-0">
+                        <dt class="col-sm-2">Address:</dt>
+                        <dd class="col-sm-10">{{ customer.address }}</dd>
+                    </dl>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Financial Information -->
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-success">
+                        <i class="fas fa-money-bill-wave me-2"></i>Financial Information
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 text-center mb-3">
+                            <div class="text-muted small">Monthly Charges</div>
+                            <div class="h4 mb-0">TSh {{ "{:,.0f}".format(customer.monthly_charges) }}</div>
+                        </div>
+                        <div class="col-md-4 text-center mb-3">
+                            <div class="text-muted small">Total Charges</div>
+                            <div class="h4 mb-0">TSh {{ "{:,.0f}".format(customer.total_charges) }}</div>
+                        </div>
+                        <div class="col-md-4 text-center mb-3">
+                            <div class="text-muted small">Outstanding Balance</div>
+                            <div class="h4 mb-0 text-{{ 'danger' if customer.outstanding_balance > 0 else 'success' }}">
+                                TSh {{ "{:,.0f}".format(customer.outstanding_balance) }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="col-md-4">
+            <div class="card shadow border-left-primary mb-3">
+                <div class="card-body">
+                    <div class="text-center">
+                        <i class="fas fa-calendar fa-2x text-primary mb-2"></i>
+                        <h3 class="mb-0">{{ customer.tenure_months }}</h3>
+                        <p class="text-muted mb-0">Months Tenure</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow border-left-info mb-3">
+                <div class="card-body">
+                    <div class="text-center">
+                        <i class="fas fa-ticket-alt fa-2x text-info mb-2"></i>
+                        <h3 class="mb-0">{{ customer.total_tickets }}</h3>
+                        <p class="text-muted mb-0">Support Tickets</p>
+                        {% if customer.last_ticket_date %}
+                        <small class="text-muted">Last: {{ customer.last_ticket_date|date }}</small>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow border-left-success mb-3">
+                <div class="card-body">
+                    <div class="text-center">
+                        <i class="fas fa-hand-holding-usd fa-2x text-success mb-2"></i>
+                        <h3 class="mb-0">{{ customer.total_payments }}</h3>
+                        <p class="text-muted mb-0">Total Payments</p>
+                        {% if customer.last_payment_date %}
+                        <small class="text-muted">Last: {{ customer.last_payment_date|date }}</small>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            {% if customer.churn_risk %}
+            <div class="card shadow border-left-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }}">
+                <div class="card-body text-center">
+                    <i class="fas fa-exclamation-triangle fa-2x text-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }} mb-2"></i>
+                    <h3 class="mb-0">{{ customer.churn_risk|upper }}</h3>
+                    <p class="text-muted mb-0">Churn Risk</p>
+                    {% if customer.churn_probability %}
+                    <div class="progress mt-2" style="height: 20px;">
+                        <div class="progress-bar bg-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }}" 
+                             role="progressbar" style="width: {{ customer.churn_probability * 100 }}%">
+                            {{ (customer.churn_probability * 100)|round(1) }}%
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Recent Activity Tabs -->
+    <div class="card shadow">
+        <div class="card-header">
+            <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                <li class="nav-item">
+                    <a class="nav-link active" data-bs-toggle="tab" href="#tickets" role="tab">
+                        <i class="fas fa-ticket-alt me-2"></i>Tickets ({{ tickets|length }})
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" href="#payments" role="tab">
+                        <i class="fas fa-money-bill-wave me-2"></i>Payments ({{ payments|length }})
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <div class="card-body">
+            <div class="tab-content">
+                <!-- Tickets Tab -->
+                <div class="tab-pane fade show active" id="tickets" role="tabpanel">
+                    {% if tickets %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Ticket #</th>
+                                    <th>Title</th>
+                                    <th>Priority</th>
+                                    <th>Status</th>
+                                    <th>Created</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for ticket in tickets %}
+                                <tr>
+                                    <td>{{ ticket.ticket_number or ticket.id }}</td>
+                                    <td>{{ ticket.title[:50] }}...</td>
+                                    <td>
+                                        <span class="badge bg-{{ 'danger' if ticket.priority == 'high' else 'warning' if ticket.priority == 'medium' else 'secondary' }}">
+                                            {{ ticket.priority|upper }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ 'warning' if ticket.status == 'open' else 'info' if ticket.status == 'in_progress' else 'success' }}">
+                                            {{ ticket.status|upper|replace('_', ' ') }}
+                                        </span>
+                                    </td>
+                                    <td>{{ ticket.created_at|datetime }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info mb-0">
+                        <i class="fas fa-info-circle me-2"></i>No tickets found for this customer.
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Payments Tab -->
+                <div class="tab-pane fade" id="payments" role="tabpanel">
+                    {% if payments %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Transaction ID</th>
+                                    <th>Amount</th>
+                                    <th>Method</th>
+                                    <th>Status</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in payments %}
+                                <tr>
+                                    <td><code class="small">{{ payment.transaction_id or payment.id }}</code></td>
+                                    <td><strong>TSh {{ "{:,.0f}".format(payment.amount) }}</strong></td>
+                                    <td>
+                                        <span class="badge bg-secondary">
+                                            {{ payment.payment_method|upper|replace('_', ' ') if payment.payment_method else 'N/A' }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if payment.status == 'completed' else 'warning' if payment.status == 'pending' else 'danger' }}">
+                                            {{ payment.status|upper }}
+                                        </span>
+                                    </td>
+                                    <td>{{ payment.payment_date|datetime }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info mb-0">
+                        <i class="fas fa-info-circle me-2"></i>No payments found for this customer.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

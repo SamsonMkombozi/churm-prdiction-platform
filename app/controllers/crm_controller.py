@@ -69,28 +69,48 @@ def dashboard():
 @login_required
 def customers():
     """
-    List all customers
+    List all customers with statistics
     """
     company = current_user.company
-    repo = CustomerRepository(company)
-    
+    customer_repo = CustomerRepository(company)
+    ticket_repo = TicketRepository(company)
+    payment_repo = PaymentRepository(company)
+
     # Get pagination parameters
     from flask import request
     page = request.args.get('page', 1, type=int)
     status = request.args.get('status')
     risk = request.args.get('risk')
-    
+
     # Get paginated customers
-    pagination = repo.get_paginated(page=page, per_page=20, status=status, risk=risk)
-    
+    pagination = customer_repo.get_paginated(page=page, per_page=20, status=status, risk=risk)
+
+    # Get stats (same structure as dashboard)
+    stats = {
+        'customers': customer_repo.count(),
+        'active_customers': customer_repo.count_by_status('active'),
+        'tickets': ticket_repo.count(),
+        'open_tickets': ticket_repo.count_by_status('open'),
+        'payments': payment_repo.count(),
+        'total_revenue': payment_repo.get_total_revenue(),
+        'last_sync': company.last_sync_at,
+        'sync_status': company.sync_status
+    }
+
+    # Get recent customers
+    recent_customers = customer_repo.get_recent(limit=5)
+
     return render_template(
         'crm/customers.html',
         company=company,
+        stats=stats,
+        recent_customers=recent_customers,
         customers=pagination.items,
         pagination=pagination,
         current_status=status,
         current_risk=risk
     )
+
 
 
 @crm_bp.route('/customers/<int:customer_id>')

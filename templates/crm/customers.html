@@ -1,0 +1,219 @@
+{% extends 'base.html' %}
+
+{% block title %}Customers - {{ company.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+        <h1 class="h2">
+            <i class="fas fa-users me-2"></i>Customer Management
+        </h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <a href="{{ url_for('crm.dashboard') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to CRM Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card border-left-primary shadow h-100">
+                <div class="card-body">
+                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                        Total Customers
+                    </div>
+                    <div class="h5 mb-0 font-weight-bold">{{ pagination.total|number }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card border-left-success shadow h-100">
+                <div class="card-body">
+                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                        Active
+                    </div>
+                    <div class="h5 mb-0 font-weight-bold">
+                        {{ customers|selectattr('status', 'equalto', 'active')|list|length|number }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card border-left-warning shadow h-100">
+                <div class="card-body">
+                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                        High Risk
+                    </div>
+                    <div class="h5 mb-0 font-weight-bold">
+                        {{ customers|selectattr('churn_risk', 'equalto', 'high')|list|length|number }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card border-left-info shadow h-100">
+                <div class="card-body">
+                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                        Avg Tenure
+                    </div>
+                    <div class="h5 mb-0 font-weight-bold">
+                        {% if customers|length > 0 %}
+                            {{ (customers|sum(attribute='tenure_months') / customers|length)|round|int }} mo
+                        {% else %}
+                            0 mo
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('crm.customers') }}" class="row g-3">
+                <div class="col-md-3">
+                    <label for="status" class="form-label">Status</label>
+                    <select name="status" id="status" class="form-select">
+                        <option value="">All Status</option>
+                        <option value="active" {% if current_status == 'active' %}selected{% endif %}>Active</option>
+                        <option value="inactive" {% if current_status == 'inactive' %}selected{% endif %}>Inactive</option>
+                        <option value="suspended" {% if current_status == 'suspended' %}selected{% endif %}>Suspended</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="risk" class="form-label">Churn Risk</label>
+                    <select name="risk" id="risk" class="form-select">
+                        <option value="">All Risk Levels</option>
+                        <option value="high" {% if current_risk == 'high' %}selected{% endif %}>High Risk</option>
+                        <option value="medium" {% if current_risk == 'medium' %}selected{% endif %}>Medium Risk</option>
+                        <option value="low" {% if current_risk == 'low' %}selected{% endif %}>Low Risk</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="search" class="form-label">Search</label>
+                    <input type="text" name="search" id="search" class="form-control" 
+                           placeholder="Customer name or email">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-filter me-2"></i>Apply
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Customers Table -->
+    <div class="card shadow">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                Showing {{ customers|length }} of {{ pagination.total }} customers
+            </h6>
+        </div>
+        <div class="card-body">
+            {% if customers %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Customer</th>
+                            <th>Status</th>
+                            <th>Service Type</th>
+                            <th>Tenure</th>
+                            <th>Monthly Charges</th>
+                            <th>Balance</th>
+                            <th>Churn Risk</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for customer in customers %}
+                        <tr>
+                            <td>{{ loop.index + (pagination.page - 1) * pagination.per_page }}</td>
+                            <td>
+                                <div>
+                                    <strong>{{ customer.customer_name }}</strong>
+                                    {% if customer.email %}
+                                    <br><small class="text-muted">{{ customer.email }}</small>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ 'success' if customer.status == 'active' else 'secondary' }}">
+                                    {{ customer.status|upper }}
+                                </span>
+                            </td>
+                            <td>{{ customer.service_type or 'N/A' }}</td>
+                            <td>{{ customer.tenure_months }} months</td>
+                            <td>TSh {{ "{:,.0f}".format(customer.monthly_charges) }}</td>
+                            <td>
+                                <span class="text-{{ 'danger' if customer.outstanding_balance > 0 else 'success' }}">
+                                    TSh {{ "{:,.0f}".format(customer.outstanding_balance) }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if customer.churn_risk %}
+                                <span class="badge bg-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }}">
+                                    {{ customer.churn_risk|upper }}
+                                </span>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('crm.customer_detail', customer_id=customer.id) }}" 
+                                   class="btn btn-sm btn-primary">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if pagination.pages > 1 %}
+            <nav aria-label="Page navigation" class="mt-3">
+                <ul class="pagination justify-content-center">
+                    <li class="page-item {{ 'disabled' if not pagination.has_prev }}">
+                        <a class="page-link" href="{{ url_for('crm.customers', page=pagination.prev_num, status=current_status, risk=current_risk) if pagination.has_prev else '#' }}">
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </a>
+                    </li>
+                    
+                    {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                        {% if page_num %}
+                            <li class="page-item {{ 'active' if page_num == pagination.page }}">
+                                <a class="page-link" href="{{ url_for('crm.customers', page=page_num, status=current_status, risk=current_risk) }}">
+                                    {{ page_num }}
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    <li class="page-item {{ 'disabled' if not pagination.has_next }}">
+                        <a class="page-link" href="{{ url_for('crm.customers', page=pagination.next_num, status=current_status, risk=current_risk) if pagination.has_next else '#' }}">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            {% endif %}
+
+            {% else %}
+            <div class="alert alert-info mb-0">
+                <i class="fas fa-info-circle me-2"></i>
+                No customers found. Try adjusting your filters or sync CRM data.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

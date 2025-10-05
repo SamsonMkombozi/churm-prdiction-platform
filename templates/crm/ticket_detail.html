@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+
+{% block title %}Ticket #{{ ticket.ticket_number or ticket.id }} - {{ company.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">
+            <i class="fas fa-ticket-alt me-2"></i>Ticket #{{ ticket.ticket_number or ticket.id }}
+        </h1>
+        <div class="btn-toolbar">
+            <a href="{{ url_for('crm.tickets') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Tickets
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <!-- Ticket Details Card -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-info-circle me-2"></i>Ticket Details
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <h4 class="mb-3">{{ ticket.title }}</h4>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-4">Ticket #:</dt>
+                                <dd class="col-sm-8"><strong>{{ ticket.ticket_number or ticket.id }}</strong></dd>
+                                
+                                <dt class="col-sm-4">Category:</dt>
+                                <dd class="col-sm-8">
+                                    <span class="badge bg-info">{{ ticket.category or 'General' }}</span>
+                                </dd>
+                                
+                                <dt class="col-sm-4">Priority:</dt>
+                                <dd class="col-sm-8">
+                                    <span class="badge bg-{{ 'danger' if ticket.priority == 'urgent' or ticket.priority == 'high' else 'warning' if ticket.priority == 'medium' else 'secondary' }}">
+                                        {{ ticket.priority|upper }}
+                                    </span>
+                                </dd>
+                                
+                                <dt class="col-sm-4">Status:</dt>
+                                <dd class="col-sm-8">
+                                    <span class="badge bg-{{ 'warning' if ticket.status == 'open' else 'info' if ticket.status == 'in_progress' else 'success' if ticket.status == 'resolved' else 'secondary' }}">
+                                        {{ ticket.status|upper|replace('_', ' ') }}
+                                    </span>
+                                </dd>
+                            </dl>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-4">Created:</dt>
+                                <dd class="col-sm-8">{{ ticket.created_at|datetime }}</dd>
+                                
+                                <dt class="col-sm-4">Updated:</dt>
+                                <dd class="col-sm-8">{{ ticket.updated_at|datetime if ticket.updated_at else 'N/A' }}</dd>
+                                
+                                {% if ticket.resolved_at %}
+                                <dt class="col-sm-4">Resolved:</dt>
+                                <dd class="col-sm-8">{{ ticket.resolved_at|datetime }}</dd>
+                                {% endif %}
+                                
+                                {% if ticket.resolution_time_hours %}
+                                <dt class="col-sm-4">Resolution Time:</dt>
+                                <dd class="col-sm-8">{{ ticket.resolution_time_hours|round(1) }} hours</dd>
+                                {% endif %}
+                            </dl>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <h6 class="font-weight-bold">Description</h6>
+                    <p class="text-muted">{{ ticket.description or 'No description provided.' }}</p>
+                    
+                    {% if ticket.resolution %}
+                    <hr>
+                    <h6 class="font-weight-bold text-success">Resolution</h6>
+                    <p class="text-muted">{{ ticket.resolution }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <!-- Customer Info Card -->
+            {% if ticket.customer %}
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-user me-2"></i>Customer Information
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <h5 class="mb-2">{{ ticket.customer.customer_name }}</h5>
+                    
+                    <dl class="mb-0">
+                        {% if ticket.customer.email %}
+                        <dt>Email:</dt>
+                        <dd><a href="mailto:{{ ticket.customer.email }}">{{ ticket.customer.email }}</a></dd>
+                        {% endif %}
+                        
+                        {% if ticket.customer.phone %}
+                        <dt>Phone:</dt>
+                        <dd><a href="tel:{{ ticket.customer.phone }}">{{ ticket.customer.phone }}</a></dd>
+                        {% endif %}
+                        
+                        <dt>Status:</dt>
+                        <dd>
+                            <span class="badge bg-{{ 'success' if ticket.customer.status == 'active' else 'secondary' }}">
+                                {{ ticket.customer.status|upper }}
+                            </span>
+                        </dd>
+                        
+                        <dt>Tenure:</dt>
+                        <dd>{{ ticket.customer.tenure_months }} months</dd>
+                    </dl>
+                    
+                    <a href="{{ url_for('crm.customer_detail', customer_id=ticket.customer.id) }}" 
+                       class="btn btn-primary btn-sm w-100 mt-3">
+                        <i class="fas fa-user me-2"></i>View Customer Profile
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Assignment Info Card -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-info">
+                        <i class="fas fa-user-tie me-2"></i>Assignment
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <dl class="mb-0">
+                        <dt>Assigned To:</dt>
+                        <dd>{{ ticket.assigned_to or 'Unassigned' }}</dd>
+                        
+                        <dt>Department:</dt>
+                        <dd>{{ ticket.department or 'N/A' }}</dd>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Ticket Stats Card -->
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-success">
+                        <i class="fas fa-chart-line me-2"></i>Ticket Statistics
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <i class="fas fa-clock fa-2x text-muted mb-2"></i>
+                        <h4 class="mb-0">
+                            {% if ticket.resolved_at %}
+                                {{ ((ticket.resolved_at - ticket.created_at).total_seconds() / 3600)|round(1) }}h
+                            {% else %}
+                                {{ ((now() - ticket.created_at).total_seconds() / 3600)|round(1) }}h
+                            {% endif %}
+                        </h4>
+                        <p class="text-muted mb-0 small">
+                            {% if ticket.status == 'resolved' or ticket.status == 'closed' %}
+                                Time to Resolution
+                            {% else %}
+                                Time Open
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
