@@ -8,7 +8,7 @@ import requests
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
-from flask import current_app
+from flask import current_app, json
 from app.extensions import db
 from app.models.company import Company
 from app.models.customer import Customer
@@ -41,55 +41,77 @@ class CRMService:
         except Exception as e:
             raise ValueError(f"Failed to decrypt CRM API key: {e}")
     
-    def _make_request(self, endpoint: str, method: str = 'GET', 
-                     params: Dict = None, data: Dict = None) -> Dict:
-        """
-        Make authenticated request to CRM API
-        
-        Args:
-            endpoint: API endpoint (e.g., 'customers', 'tickets')
-            method: HTTP method
-            params: Query parameters
-            data: Request body data
+    def _make_request(self, table: str) -> List[Dict]:
+            """
+            Make request to Habari CRM API
             
-        Returns:
-            Response data as dictionary
-        """
-        url = f"{self.api_url}/{endpoint}"
-        
-        headers = {
-            'Authorization': f'Bearer {self.api_key}',
-            'Content-Type': 'application/json'
-        }
-        
-        try:
-            logger.info(f"CRM API Request: {method} {url}")
+            Args:
+                table: Table name (customers, payments, tickets)
+                
+            Returns:
+                List of records from the API
+            """
+            # Habari CRM API uses query parameters, not paths
+            url = self.api_url
+            params = {'table': table}
             
-            response = requests.request(
-                method=method,
-                url=url,
-                headers=headers,
-                params=params,
-                json=data,
-                timeout=self.timeout
-            )
+            try:
+                logger.info(f"CRM API Request: GET {url}?table={table}")
+                
+                response = requests.get(
+                    url,
+                    params=params,
+                    timeout=self.timeout
+                )
+                
+                response.raise_for_status()
+                
+                # Parse JSON response
+                data = response.json()
+                
+                # Handle Habari CRM API response format: {'status': 'success', 'data': [...]}
+                if isinstance(data, dict):
+                    # Check status first
+                    if data.get('status') == 'success' and 'data' in data:
+                        records = data['data']
+                        logger.info(f"Successfully fetched {len(records) if isinstance(records, list) else 1} records from {table}")
+                        return records if isinstance(records, list) else [records]
+                    elif 'data' in data:
+                        # Has data but different status
+                        records = data['data']
+                        return records if isinstance(records, list) else [records]
+                    elif 'records' in data:
+                        records = data['records']
+                        return records if isinstance(records, list) else [records]
+                    elif 'error' in data:
+                        logger.error(f"CRM API error: {data['error']}")
+                        raise Exception(f"CRM API error: {data['error']}")
+                    else:
+                        # Return as single-item list
+                        return [data]
+                elif isinstance(data, list):
+                    # Direct list of records
+                    return data
+                else:
+                    logger.warning(f"Unexpected response type: {type(data)}")
+                    return []
+                
+            except requests.exceptions.Timeout:
+                logger.error(f"CRM API timeout: {url}")
+                raise Exception("CRM API request timed out")
             
-            response.raise_for_status()
+            except requests.exceptions.HTTPError as e:
+                logger.error(f"CRM API HTTP error: {e}")
+                raise Exception(f"CRM API error: {e.response.status_code}")
             
-            return response.json()
+            except requests.exceptions.RequestException as e:
+                logger.error(f"CRM API request failed: {e}")
+                raise Exception(f"Failed to connect to CRM: {str(e)}")
             
-        except requests.exceptions.Timeout:
-            logger.error(f"CRM API timeout: {url}")
-            raise Exception("CRM API request timed out")
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON response: {e}")
+                raise Exception("CRM API returned invalid JSON")
         
-        except requests.exceptions.HTTPError as e:
-            logger.error(f"CRM API HTTP error: {e}")
-            raise Exception(f"CRM API error: {e.response.status_code}")
-        
-        except requests.exceptions.RequestException as e:
-            logger.error(f"CRM API request failed: {e}")
-            raise Exception(f"Failed to connect to CRM: {str(e)}")
-    
     def test_connection(self) -> Tuple[bool, str]:
         """
         Test connection to CRM API

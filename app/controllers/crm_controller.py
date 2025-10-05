@@ -34,14 +34,20 @@ def dashboard():
     ticket_repo = TicketRepository(company)
     payment_repo = PaymentRepository(company)
     
-    # Get statistics
+# Get statistics
     stats = {
+        'total_customers': customer_repo.count(),
         'customers': customer_repo.count(),
         'active_customers': customer_repo.count_by_status('active'),
+        'total_tickets': ticket_repo.count(),
         'tickets': ticket_repo.count(),
         'open_tickets': ticket_repo.count_by_status('open'),
+        'total_payments': payment_repo.count(),
         'payments': payment_repo.count(),
-        'total_revenue': payment_repo.get_total_revenue()
+        'total_revenue': payment_repo.get_total_revenue(),
+        'active_users': current_user.company.get_active_user_count(),
+        'last_sync': company.last_sync_at,
+        'sync_status': company.sync_status
     }
     
     # Get recent data

@@ -45,6 +45,20 @@ class CustomerRepository:
         
         return query.all()
     
+    def get_recent(self, limit: int = 10) -> List[Customer]:
+        """
+        Get recently added customers
+        
+        Args:
+            limit: Maximum number of customers to return
+            
+        Returns:
+            List of recent customers
+        """
+        return Customer.query.filter_by(
+            company_id=self.company_id
+        ).order_by(Customer.created_at.desc()).limit(limit).all()
+        
     def get_active(self) -> List[Customer]:
         """Get all active customers"""
         return Customer.query.filter_by(
