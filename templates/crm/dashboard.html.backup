@@ -44,7 +44,7 @@
                                 Total Customers
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ stats.customers|number }}
+                                {{ stats.customers}}
                             </div>
                         </div>
                         <div class="col-auto">
@@ -64,7 +64,7 @@
                                 Active Customers
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ stats.active_customers|number }}
+                                {{ stats.active_customers}}
                             </div>
                         </div>
                         <div class="col-auto">
@@ -84,7 +84,7 @@
                                 Support Tickets
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ stats.tickets|number }}
+                                {{ stats.tickets}}
                             </div>
                             <small class="text-muted">{{ stats.open_tickets|number }} open</small>
                         </div>

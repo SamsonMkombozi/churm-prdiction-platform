@@ -296,52 +296,31 @@ class CRMService:
             }
     
     def sync_payments(self) -> Dict:
-        """
-        Sync payment transactions from CRM to database
-        ✅ FIXED: Handles missing customers gracefully
-        
-        Returns:
-            Dictionary with sync results
-        """
+        """Sync payment transactions - FIXED"""
         from app.repositories.payment_repository import PaymentRepository
         
         try:
-            # Fetch payments from CRM
             payments_data = self.fetch_payments()
-            
             repo = PaymentRepository(self.company)
             
-            created = 0
-            updated = 0
-            skipped = 0  # ✅ NEW: Track skipped payments
-            errors = 0
+            created = updated = skipped = errors = 0
             
             for payment_data in payments_data:
                 try:
                     result = repo.create_or_update(payment_data)
-                    
-                    # ✅ FIX: Handle None return (skipped due to missing customer)
                     if result is True:
                         created += 1
                     elif result is False:
                         updated += 1
                     elif result is None:
                         skipped += 1
-                        
                 except Exception as e:
                     logger.error(f"Failed to sync payment {payment_data.get('id')}: {e}")
                     errors += 1
             
-            # Commit all changes
             db.session.commit()
             
-            # Build message
-            message = f"Synced {created} new, {updated} updated"
-            if skipped > 0:
-                message += f", {skipped} skipped (customers not found)"
-            if errors > 0:
-                message += f", {errors} errors"
-            
+            message = f"Synced {created} new, {updated} updated, {skipped} skipped"
             logger.info(message)
             
             return {
@@ -357,10 +336,7 @@ class CRMService:
         except Exception as e:
             db.session.rollback()
             logger.error(f"Payment sync failed: {e}")
-            return {
-                'success': False,
-                'error': str(e)
-            }
+            return {'success': False, 'error': str(e)}
     def sync_data(self, full_sync: bool = True) -> Dict:
         """
         Perform complete data synchronization
