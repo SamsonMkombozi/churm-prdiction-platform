@@ -5,6 +5,8 @@ import os
 from flask import Flask
 from app.config.settings import get_config
 from app.extensions import init_extensions, db, login_manager
+# from app.controllers.prediction_controller import prediction_bp
+from app.models import user, company, customer, ticket, payment, prediction
 
 def create_app(config_name='development'):
     """
@@ -73,6 +75,12 @@ def register_blueprints(app):
     from app.controllers.company_controller import company_bp
     from app.controllers.dashboard_controller import dashboard_bp
     from app.controllers.crm_controller import crm_bp  # NEW: Phase 4
+    # Add to app/__init__.py after importing other blueprints:
+    from app.controllers.prediction_controller import prediction_bp
+
+    # Add to register_blueprints() function:
+    app.register_blueprint(prediction_bp, url_prefix='/predictions')
+    app.logger.info('✅ Prediction blueprint registered')
     
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.logger.info('✅ Auth blueprint registered')
