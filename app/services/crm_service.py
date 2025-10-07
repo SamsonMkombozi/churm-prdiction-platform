@@ -406,6 +406,8 @@ class CRMService:
                 'success': False,
                 'error': str(e)
             }
+            
+            
     def sync_data(self, full_sync: bool = True) -> Dict:
         """
         Perform complete data synchronization
@@ -417,6 +419,29 @@ class CRMService:
             Dictionary with comprehensive sync results
         """
         logger.info(f"Starting {'full' if full_sync else 'incremental'} sync for company {self.company.id}")
+        
+        # ✅ FIX: Check if sync is stuck and reset if needed
+        if self.company.sync_status == 'in_progress':
+            # Check if last sync was more than 10 minutes ago
+            if self.company.last_sync_at:
+                from datetime import timedelta
+                time_since_last = datetime.utcnow() - self.company.last_sync_at
+                if time_since_last > timedelta(minutes=10):
+                    logger.warning(f"Resetting stuck sync status for company {self.company.id}")
+                    self.company.sync_status = 'failed'
+                    self.company.sync_error = 'Previous sync timed out'
+                    db.session.commit()
+                else:
+                    # Sync is genuinely in progress
+                    return {
+                        'status': 'error',
+                        'message': 'Sync already in progress. Please wait.'
+                    }
+            else:
+                # No last sync time but status is in_progress - reset it
+                logger.warning(f"Resetting orphaned in_progress status for company {self.company.id}")
+                self.company.sync_status = 'pending'
+                db.session.commit()
         
         # Update sync status to in_progress
         self.company.update_sync_status('in_progress')
@@ -430,6 +455,7 @@ class CRMService:
         }
         
         try:
+        # ... rest of the sync logic
             # Sync customers
             logger.info("Syncing customers...")
             results['customers'] = self.sync_customers()

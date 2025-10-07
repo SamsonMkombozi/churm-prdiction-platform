@@ -9,15 +9,21 @@
             <i class="fas fa-sync-alt me-2"></i>CRM Dashboard
         </h1>
         <div class="btn-toolbar mb-2 mb-md-0">
-            {% if current_user.is_manager() %}
-            <button type="button" class="btn btn-primary me-2" id="syncButton">
-                <i class="fas fa-sync-alt me-2"></i>Sync CRM Data
-            </button>
-            {% endif %}
-            <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline-secondary">
-                <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
-            </a>
-        </div>
+        {% if current_user.is_manager() %}
+        <button type="button" class="btn btn-primary me-2" id="syncButton">
+            <i class="fas fa-sync-alt me-2"></i>Sync CRM Data
+        </button>
+        <!-- ✅ NEW: Reset button for stuck syncs -->
+        {% if company.sync_status == 'in_progress' %}
+        <button type="button" class="btn btn-warning me-2" id="resetSyncButton">
+            <i class="fas fa-redo me-2"></i>Reset Sync
+        </button>
+        {% endif %}
+        {% endif %}
+        <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+        </a>
+    </div>
     </div>
 
     <!-- Sync Status Alert -->
@@ -351,6 +357,55 @@ document.addEventListener('DOMContentLoaded', function() {
                 syncButton.disabled = false;
                 syncButton.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Sync CRM Data';
             });
+        });
+    }
+});
+</script>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const syncButton = document.getElementById('syncButton');
+    const resetSyncButton = document.getElementById('resetSyncButton');
+    const syncAlert = document.getElementById('syncAlert');
+    
+    // Existing sync button handler
+    if (syncButton) {
+        syncButton.addEventListener('click', function() {
+            // ... existing sync code ...
+        });
+    }
+    
+    // ✅ NEW: Reset sync button handler
+    if (resetSyncButton) {
+        resetSyncButton.addEventListener('click', function() {
+            if (confirm('Are you sure you want to reset the sync status? This should only be done if a sync is stuck.')) {
+                resetSyncButton.disabled = true;
+                resetSyncButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Resetting...';
+                
+                fetch('{{ url_for("company.reset_sync_status") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message);
+                        window.location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                        resetSyncButton.disabled = false;
+                        resetSyncButton.innerHTML = '<i class="fas fa-redo me-2"></i>Reset Sync';
+                    }
+                })
+                .catch(error => {
+                    alert('Error resetting sync: ' + error);
+                    resetSyncButton.disabled = false;
+                    resetSyncButton.innerHTML = '<i class="fas fa-redo me-2"></i>Reset Sync';
+                });
+            }
         });
     }
 });

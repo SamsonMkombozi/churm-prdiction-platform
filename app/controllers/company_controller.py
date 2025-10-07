@@ -278,7 +278,36 @@ def sync_status():
         'total_syncs': company.total_syncs,
         'error': company.sync_error
     })
+    
 
+@company_bp.route('/sync/reset', methods=['POST'])
+@login_required
+@manager_required
+def reset_sync_status():
+    """
+    Reset sync status if stuck
+    """
+    try:
+        company = current_user.company
+        
+        logger.info(f"Manually resetting sync status for company {company.id}")
+        
+        company.sync_status = 'pending'
+        company.sync_error = None
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Sync status has been reset. You can now start a new sync.'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error resetting sync status: {e}")
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+        
 
 @company_bp.route('/statistics')
 @login_required

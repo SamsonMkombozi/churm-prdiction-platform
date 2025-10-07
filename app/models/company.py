@@ -168,6 +168,8 @@ class Company(db.Model):
             self.sync_error = None
         elif status == 'failed' and error:
             self.sync_error = str(error)
+        elif status == 'pending':
+            self.sync_error = None  # ✅ Clear error on reset
         
         if commit:
             db.session.commit()
