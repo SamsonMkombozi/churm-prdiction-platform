@@ -142,6 +142,56 @@ class PaymentRepository:
         else:
             created_payment = self.create(payment_data)
             return True if created_payment else None
+        
+    def create_or_update_payment(self, payment_data):
+        """Create/update payment with customer validation"""
+        customer_id = payment_data.get('customer_id')
+        
+        # Verify customer exists
+        customer = Customer.query.filter_by(crm_id=customer_id).first()
+        if not customer:
+            logger.warning(f"Skipping payment {payment_data.get('id')} - Customer {customer_id} not found")
+            
+            # Option A: Skip this payment
+            # return None
+            
+            # Option B: Create placeholder customer (use with caution)
+            customer = self._create_placeholder_customer(customer_id)
+        
+        # Continue with payment creation...
+        payment = Payment.query.filter_by(crm_id=payment_data['id']).first()
+        
+        if not payment:
+            payment = Payment(
+                crm_id=payment_data['id'],
+                customer_id=customer.id,  # Use internal ID, not CRM ID
+                # ... other fields
+            )
+            db.session.add(payment)
+        else:
+            # Update existing payment
+            payment.amount = payment_data.get('amount')
+            # ... other updates
+        
+        db.session.commit()
+        return payment
+    
+    def ensure_customer_exists(self, crm_customer_id):
+        """Ensure customer exists, create placeholder if missing"""
+        customer = Customer.query.filter_by(crm_customer_id=crm_customer_id).first()
+        
+        if not customer:
+            logger.warning(f"Customer {crm_customer_id} missing, creating placeholder")
+            customer = Customer(
+                crm_customer_id=crm_customer_id,
+                name=f"Unknown Customer {crm_customer_id}",
+                email=f"unknown_{crm_customer_id}@placeholder.com",
+                status='active'
+            )
+            db.session.add(customer)
+            db.session.flush()  # Get ID without committing
+            
+        return customer
     
     def delete(self, payment: Payment):
         db.session.delete(payment)

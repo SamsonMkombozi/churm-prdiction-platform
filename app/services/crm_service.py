@@ -131,6 +131,37 @@ class CRMService:
                 
         except Exception as e:
             return False, str(e)
+        
+    def sync_all_data(self):
+        """Sync data in correct dependency order"""
+        logger.info("Starting full CRM sync...")
+        
+        results = {
+            'customers': 0,
+            'subscriptions': 0,
+            'payments': 0,
+            'errors': []
+        }
+        
+        try:
+            # CRITICAL: Sync in dependency order
+            # 1. Customers first (no dependencies)
+            results['customers'] = self.sync_customers()
+            logger.info(f"Synced {results['customers']} customers")
+            
+            # 2. Subscriptions (depend on customers)
+            results['subscriptions'] = self.sync_subscriptions()
+            logger.info(f"Synced {results['subscriptions']} subscriptions")
+            
+            # 3. Payments last (depend on customers)
+            results['payments'] = self.sync_payments()
+            logger.info(f"Synced {results['payments']} payments")
+            
+        except Exception as e:
+            logger.error(f"Sync failed: {str(e)}")
+            results['errors'].append(str(e))
+        
+        return results
     
     def fetch_customers(self, limit: int = 1000, 
                        since: Optional[datetime] = None) -> List[Dict]:
