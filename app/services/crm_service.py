@@ -176,7 +176,7 @@ class CRMService:
             List of customer dictionaries
         """
         try:
-            customers = self._make_request('customers')
+            customers = self._make_request('crm_customers')
             logger.info(f"Fetched {len(customers)} customers from CRM")
             return customers
             
@@ -197,7 +197,7 @@ class CRMService:
             List of ticket dictionaries
         """
         try:
-            tickets = self._make_request('tickets')
+            tickets = self._make_request('tickets_full')
             logger.info(f"Fetched {len(tickets)} tickets from CRM")
             return tickets
             
@@ -218,7 +218,7 @@ class CRMService:
             List of payment dictionaries
         """
         try:
-            payments = self._make_request('payments')
+            payments = self._make_request('nav_mpesa_transaction')
             logger.info(f"Fetched {len(payments)} payments from CRM")
             return payments
             

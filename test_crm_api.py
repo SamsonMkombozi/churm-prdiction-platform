@@ -16,7 +16,7 @@ print("=" * 60)
 # Test 1: Get customers
 print("\n1. Testing customers endpoint...")
 try:
-    response = requests.get(f"{CRM_API_URL}?table=customers", timeout=30)
+    response = requests.get(f"{CRM_API_URL}?table=crm_customers&limit=100", timeout=30)
     print(f"   Status Code: {response.status_code}")
     print(f"   Content-Type: {response.headers.get('Content-Type')}")
     
@@ -46,7 +46,30 @@ except requests.exceptions.RequestException as e:
 # Test 2: Get payments
 print("\n2. Testing payments endpoint...")
 try:
-    response = requests.get(f"{CRM_API_URL}?table=payments", timeout=30)
+    response = requests.get(f"{CRM_API_URL}?table=nav_mpesa_transaction&limit=100", timeout=30)
+    print(f"   Status Code: {response.status_code}")
+    
+    try:
+        data = response.json()
+        print(f"   Response Type: {type(data)}")
+        
+        if isinstance(data, dict):
+            print(f"   Keys: {list(data.keys())}")
+        elif isinstance(data, list):
+            print(f"   List Length: {len(data)}")
+            print("\n   Raw Response (first 500 chars):")
+        print("   " + json.dumps(data, indent=2)[:500])
+            
+    except json.JSONDecodeError as e:
+        print(f"   ❌ JSON decode error: {e}")
+        
+except requests.exceptions.RequestException as e:
+    print(f"   ❌ Request failed: {e}")
+
+# Test 3: Get tickets
+print("\n3. Testing tickets endpoint...")
+try:
+    response = requests.get(f"{CRM_API_URL}?table=tickets_full&limit=100", timeout=30)
     print(f"   Status Code: {response.status_code}")
     
     try:
@@ -58,26 +81,8 @@ try:
         elif isinstance(data, list):
             print(f"   List Length: {len(data)}")
             
-    except json.JSONDecodeError as e:
-        print(f"   ❌ JSON decode error: {e}")
-        
-except requests.exceptions.RequestException as e:
-    print(f"   ❌ Request failed: {e}")
-
-# Test 3: Get tickets
-print("\n3. Testing tickets endpoint...")
-try:
-    response = requests.get(f"{CRM_API_URL}?table=tickets", timeout=30)
-    print(f"   Status Code: {response.status_code}")
-    
-    try:
-        data = response.json()
-        print(f"   Response Type: {type(data)}")
-        
-        if isinstance(data, dict):
-            print(f"   Keys: {list(data.keys())}")
-        elif isinstance(data, list):
-            print(f"   List Length: {len(data)}")
+            print("\n   Raw Response (first 500 chars):")
+        print("   " + json.dumps(data, indent=2)[:500])
             
     except json.JSONDecodeError as e:
         print(f"   ❌ JSON decode error: {e}")
