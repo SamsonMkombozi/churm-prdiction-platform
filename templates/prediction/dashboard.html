@@ -1,318 +1,286 @@
-{% extends 'base.html' %}
+<!-- templates/prediction/dashboard.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predictions Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">Dashboard</a></li>
+                        <li class="breadcrumb-item active">Predictions</li>
+                    </ol>
+                </nav>
 
-{% block title %}Predictions Dashboard - {{ company.name }}{% endblock %}
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2">Churn Predictions Dashboard</h1>
+                </div>
 
-{% block content %}
-<div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="h2">
-            <i class="fas fa-brain me-2"></i>Churn Predictions Dashboard
-        </h1>
-        <div class="btn-toolbar">
-            {% if current_user.is_manager() %}
-            <button type="button" class="btn btn-primary me-2" id="runPredictionsBtn">
-                <i class="fas fa-play me-2"></i>Run Predictions
-            </button>
-            {% endif %}
-            <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline-secondary">
-                <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
-            </a>
-        </div>
-    </div>
-
-    <!-- Statistics Cards -->
-    <div class="row mb-4">
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-primary shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                Total Predictions
+                <!-- Flash messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                             </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ stats.total_predictions }}
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <!-- Company Info -->
+                {% if company %}
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="fas fa-building"></i> {{ company.name }} - Prediction Analytics
+                                </h5>
+                                <p class="card-text">Monitor and analyze customer churn predictions for your business.</p>
                             </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-brain fa-2x text-gray-300"></i>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
+                {% endif %}
 
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-danger shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
-                                High Risk
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ stats.high_risk }}
-                            </div>
-                            <small class="text-danger">
-                                <i class="fas fa-exclamation-triangle me-1"></i>
-                                Immediate attention needed
-                            </small>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-exclamation-circle fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                Medium Risk
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ stats.medium_risk }}
-                            </div>
-                            <small class="text-warning">
-                                <i class="fas fa-eye me-1"></i>Monitor closely
-                            </small>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-exclamation fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-success shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                Low Risk
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ stats.low_risk }}
-                            </div>
-                            <small class="text-success">
-                                <i class="fas fa-check-circle me-1"></i>Healthy customers
-                            </small>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-check fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- High Risk Customers Table -->
-    <div class="card shadow mb-4">
-        <div class="card-header py-3 d-flex justify-content-between align-items-center">
-            <h6 class="m-0 font-weight-bold text-danger">
-                <i class="fas fa-exclamation-triangle me-2"></i>High Risk Customers
-            </h6>
-            <a href="{{ url_for('prediction.high_risk_customers') }}" class="btn btn-sm btn-danger">
-                View All <i class="fas fa-arrow-right ms-1"></i>
-            </a>
-        </div>
-        <div class="card-body">
-            {% if high_risk_customers %}
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Customer</th>
-                            <th>Churn Probability</th>
-                            <th>Risk Level</th>
-                            <th>Tenure</th>
-                            <th>Last Prediction</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for customer, prediction in high_risk_customers %}
-                        <tr>
-                            <td>
-                                <strong>{{ customer.customer_name }}</strong><br>
-                                <small class="text-muted">{{ customer.email or 'No email' }}</small>
-                            </td>
-                            <td>
-                                <div class="progress" style="height: 20px;">
-                                    <div class="progress-bar bg-danger" role="progressbar" 
-                                         style="width: {{ (prediction.churn_probability * 100)|round(1) }}%">
-                                        {{ (prediction.churn_probability * 100)|round(1) }}%
+                <!-- Prediction Statistics -->
+                <div class="row mb-4">
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="card border-left-primary shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                            Total Customers
+                                        </div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                            {{ stats.total_customers if stats else 0 }}
+                                        </div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-users fa-2x text-gray-300"></i>
                                     </div>
                                 </div>
-                            </td>
-                            <td>
-                                <span class="badge bg-danger">HIGH RISK</span>
-                            </td>
-                            <td>{{ customer.tenure_months }} months</td>
-                            <td>{{ prediction.predicted_at.strftime('%Y-%m-%d %H:%M') if prediction.predicted_at else 'N/A' }}</td>
-                            <td>
-                                <a href="{{ url_for('prediction.customer_prediction', customer_id=customer.id) }}" 
-                                   class="btn btn-sm btn-primary">
-                                    <i class="fas fa-eye"></i> View
-                                </a>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <div class="alert alert-success">
-                <i class="fas fa-check-circle me-2"></i>
-                <strong>Great news!</strong> No high-risk customers at the moment.
-            </div>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- Model Information -->
-    <div class="card shadow">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">
-                <i class="fas fa-info-circle me-2"></i>Model Information
-            </h6>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-6">
-                    <dl class="row">
-                        <dt class="col-sm-4">Model Version:</dt>
-                        <dd class="col-sm-8"><code>v1.0-rule-based</code></dd>
-                        
-                        <dt class="col-sm-4">Algorithm:</dt>
-                        <dd class="col-sm-8">Rule-based Scoring</dd>
-                        
-                        <dt class="col-sm-4">Status:</dt>
-                        <dd class="col-sm-8"><span class="badge bg-success">Active</span></dd>
-                    </dl>
-                </div>
-                <div class="col-md-6">
-                    <dl class="row">
-                        <dt class="col-sm-4">High Threshold:</dt>
-                        <dd class="col-sm-8">{{ (company.get_setting('prediction_threshold_high', 0.7) * 100)|round }}%</dd>
-                        
-                        <dt class="col-sm-4">Medium Threshold:</dt>
-                        <dd class="col-sm-8">{{ (company.get_setting('prediction_threshold_medium', 0.4) * 100)|round }}%</dd>
-                        
-                        <dt class="col-sm-4">Total Customers:</dt>
-                        <dd class="col-sm-8">{{ stats.total_customers }}</dd>
-                    </dl>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-{% if current_user.is_manager() %}
-<!-- Run Predictions Modal -->
-<div class="modal fade" id="runPredictionsModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fas fa-brain me-2"></i>Run Churn Predictions
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div id="predictionProgress" class="d-none">
-                    <div class="text-center mb-3">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Running predictions...</span>
+                            </div>
                         </div>
                     </div>
-                    <div class="progress">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                             role="progressbar" style="width: 100%"></div>
+
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="card border-left-danger shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                            High Risk Customers
+                                        </div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                            {{ stats.at_risk_customers if stats else 0 }}
+                                        </div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <p class="text-center mt-3 mb-0">
-                        <small class="text-muted">Analyzing customer data and calculating churn probabilities...</small>
-                    </p>
-                </div>
-                <div id="predictionForm">
-                    <p>This will run churn predictions for all customers in your database.</p>
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>
-                        <strong>Note:</strong> This process may take a few minutes depending on the number of customers.
+
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="card border-left-success shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                            Model Accuracy
+                                        </div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                            {{ "%.1f%%" % stats.prediction_accuracy if stats else "0.0%" }}
+                                        </div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-chart-line fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="card border-left-info shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                            Last Analysis
+                                        </div>
+                                        <div class="h6 mb-0 font-weight-bold text-gray-800">
+                                            {{ stats.last_updated if stats else 'Never' }}
+                                        </div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-clock fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="confirmRunPredictions">
-                    <i class="fas fa-play me-2"></i>Run Predictions
-                </button>
+
+                <!-- Actions and Tools -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="m-0 font-weight-bold text-primary">Prediction Tools</h6>
+                            </div>
+                            <div class="card-body">
+                                <a href="{{ url_for('prediction.upload') }}" class="btn btn-primary btn-sm mb-2 d-block">
+                                    <i class="fas fa-upload"></i> Upload Customer Data for Batch Prediction
+                                </a>
+                                <button class="btn btn-success btn-sm mb-2 d-block" onclick="runPrediction()">
+                                    <i class="fas fa-play"></i> Run New Prediction Analysis
+                                </button>
+                                <button class="btn btn-info btn-sm mb-2 d-block" onclick="exportResults()">
+                                    <i class="fas fa-download"></i> Export Prediction Results
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="m-0 font-weight-bold text-primary">Model Information</h6>
+                            </div>
+                            <div class="card-body">
+                                <p><strong>Algorithm:</strong> Random Forest Classifier</p>
+                                <p><strong>Features:</strong> Customer behavior, transaction history, engagement metrics</p>
+                                <p><strong>Training Data:</strong> Last 12 months</p>
+                                <p><strong>Prediction Threshold:</strong> 0.5 (50%)</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Placeholder for Charts/Graphs -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="m-0 font-weight-bold text-primary">Prediction Trends</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="text-center text-muted">
+                                    <i class="fas fa-chart-area fa-3x mb-3"></i>
+                                    <p>Charts and visualizations will be displayed here once prediction data is available.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
-</div>
-{% endif %}
-{% endblock %}
 
-{% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const runBtn = document.getElementById('runPredictionsBtn');
-    const modal = document.getElementById('runPredictionsModal');
-    const confirmBtn = document.getElementById('confirmRunPredictions');
-    const progressDiv = document.getElementById('predictionProgress');
-    const formDiv = document.getElementById('predictionForm');
-    
-    if (runBtn && modal) {
-        const modalInstance = new bootstrap.Modal(modal);
-        
-        runBtn.addEventListener('click', function() {
-            modalInstance.show();
-        });
-        
-        if (confirmBtn) {
-            confirmBtn.addEventListener('click', function() {
-                // Show progress
-                formDiv.classList.add('d-none');
-                progressDiv.classList.remove('d-none');
-                confirmBtn.disabled = true;
-                
-                // Make API call
-                fetch('{{ url_for("prediction.run_predictions") }}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Show success and reload
-                        alert(data.message);
-                        window.location.reload();
-                    } else {
-                        alert('Error: ' + data.message);
-                        formDiv.classList.remove('d-none');
-                        progressDiv.classList.add('d-none');
-                        confirmBtn.disabled = false;
-                    }
-                })
-                .catch(error => {
-                    alert('Error running predictions: ' + error);
-                    formDiv.classList.remove('d-none');
-                    progressDiv.classList.add('d-none');
-                    confirmBtn.disabled = false;
-                });
-            });
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function runPrediction() {
+            alert('Prediction analysis will be implemented here.');
         }
-    }
-});
-</script>
-{% endblock %}
+
+        function exportResults() {
+            alert('Export functionality will be implemented here.');
+        }
+    </script>
+</body>
+</html>
+
+<!-- templates/prediction/upload.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Customer Data</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-4">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('prediction.dashboard') }}">Predictions</a></li>
+                <li class="breadcrumb-item active">Upload Data</li>
+            </ol>
+        </nav>
+
+        <h1 class="h2 mb-4">Upload Customer Data for Prediction</h1>
+
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body">
+                        <form action="{{ url_for('prediction.upload') }}" method="post" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="file" class="form-label">Select CSV File</label>
+                                <input type="file" class="form-control" id="file" name="file" accept=".csv" required>
+                                <div class="form-text">Upload a CSV file containing customer data for churn prediction.</div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-upload"></i> Upload and Process
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="m-0">CSV Format Requirements</h6>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Required columns:</strong></p>
+                        <ul class="small">
+                            <li>customer_id</li>
+                            <li>monthly_charges</li>
+                            <li>total_charges</li>
+                            <li>tenure</li>
+                        </ul>
+                        <p><strong>Optional columns:</strong></p>
+                        <ul class="small">
+                            <li>contract_type</li>
+                            <li>payment_method</li>
+                            <li>senior_citizen</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
