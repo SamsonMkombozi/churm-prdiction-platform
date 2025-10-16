@@ -31,7 +31,7 @@
                                 Total Predictions
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ stats.total_predictions|number }}
+                                {{ stats.total_predictions }}
                             </div>
                         </div>
                         <div class="col-auto">
@@ -51,7 +51,7 @@
                                 High Risk
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ stats.high_risk|number }}
+                                {{ stats.high_risk }}
                             </div>
                             <small class="text-danger">
                                 <i class="fas fa-exclamation-triangle me-1"></i>
@@ -75,7 +75,7 @@
                                 Medium Risk
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ stats.medium_risk|number }}
+                                {{ stats.medium_risk }}
                             </div>
                             <small class="text-warning">
                                 <i class="fas fa-eye me-1"></i>Monitor closely
@@ -98,7 +98,7 @@
                                 Low Risk
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ stats.low_risk|number }}
+                                {{ stats.low_risk }}
                             </div>
                             <small class="text-success">
                                 <i class="fas fa-check-circle me-1"></i>Healthy customers
@@ -142,12 +142,12 @@
                         <tr>
                             <td>
                                 <strong>{{ customer.customer_name }}</strong><br>
-                                <small class="text-muted">{{ customer.email }}</small>
+                                <small class="text-muted">{{ customer.email or 'No email' }}</small>
                             </td>
                             <td>
                                 <div class="progress" style="height: 20px;">
                                     <div class="progress-bar bg-danger" role="progressbar" 
-                                         style="width: {{ prediction.churn_probability * 100 }}%">
+                                         style="width: {{ (prediction.churn_probability * 100)|round(1) }}%">
                                         {{ (prediction.churn_probability * 100)|round(1) }}%
                                     </div>
                                 </div>
@@ -156,7 +156,7 @@
                                 <span class="badge bg-danger">HIGH RISK</span>
                             </td>
                             <td>{{ customer.tenure_months }} months</td>
-                            <td>{{ prediction.predicted_at|datetime }}</td>
+                            <td>{{ prediction.predicted_at.strftime('%Y-%m-%d %H:%M') if prediction.predicted_at else 'N/A' }}</td>
                             <td>
                                 <a href="{{ url_for('prediction.customer_prediction', customer_id=customer.id) }}" 
                                    class="btn btn-sm btn-primary">
@@ -189,25 +189,25 @@
                 <div class="col-md-6">
                     <dl class="row">
                         <dt class="col-sm-4">Model Version:</dt>
-                        <dd class="col-sm-8"><code>v1.0</code></dd>
+                        <dd class="col-sm-8"><code>v1.0-rule-based</code></dd>
                         
                         <dt class="col-sm-4">Algorithm:</dt>
-                        <dd class="col-sm-8">XGBoost Classifier</dd>
+                        <dd class="col-sm-8">Rule-based Scoring</dd>
                         
-                        <dt class="col-sm-4">Last Updated:</dt>
-                        <dd class="col-sm-8">{{ company.last_sync_at|datetime if company.last_sync_at else 'Never' }}</dd>
+                        <dt class="col-sm-4">Status:</dt>
+                        <dd class="col-sm-8"><span class="badge bg-success">Active</span></dd>
                     </dl>
                 </div>
                 <div class="col-md-6">
                     <dl class="row">
                         <dt class="col-sm-4">High Threshold:</dt>
-                        <dd class="col-sm-8">{{ company.get_setting('prediction_threshold_high', 0.7) * 100 }}%</dd>
+                        <dd class="col-sm-8">{{ (company.get_setting('prediction_threshold_high', 0.7) * 100)|round }}%</dd>
                         
                         <dt class="col-sm-4">Medium Threshold:</dt>
-                        <dd class="col-sm-8">{{ company.get_setting('prediction_threshold_medium', 0.4) * 100 }}%</dd>
+                        <dd class="col-sm-8">{{ (company.get_setting('prediction_threshold_medium', 0.4) * 100)|round }}%</dd>
                         
                         <dt class="col-sm-4">Total Customers:</dt>
-                        <dd class="col-sm-8">{{ stats.total_customers|number }}</dd>
+                        <dd class="col-sm-8">{{ stats.total_customers }}</dd>
                     </dl>
                 </div>
             </div>
@@ -215,6 +215,7 @@
     </div>
 </div>
 
+{% if current_user.is_manager() %}
 <!-- Run Predictions Modal -->
 <div class="modal fade" id="runPredictionsModal" tabindex="-1">
     <div class="modal-dialog">
@@ -257,57 +258,60 @@
         </div>
     </div>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const runBtn = document.getElementById('runPredictionsBtn');
-    const modal = new bootstrap.Modal(document.getElementById('runPredictionsModal'));
+    const modal = document.getElementById('runPredictionsModal');
     const confirmBtn = document.getElementById('confirmRunPredictions');
     const progressDiv = document.getElementById('predictionProgress');
     const formDiv = document.getElementById('predictionForm');
     
-    if (runBtn) {
+    if (runBtn && modal) {
+        const modalInstance = new bootstrap.Modal(modal);
+        
         runBtn.addEventListener('click', function() {
-            modal.show();
+            modalInstance.show();
         });
-    }
-    
-    if (confirmBtn) {
-        confirmBtn.addEventListener('click', function() {
-            // Show progress
-            formDiv.classList.add('d-none');
-            progressDiv.classList.remove('d-none');
-            confirmBtn.disabled = true;
-            
-            // Make API call
-            fetch('{{ url_for("prediction.run_predictions") }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Show success and reload
-                    alert(data.message);
-                    window.location.reload();
-                } else {
-                    alert('Error: ' + data.message);
+        
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', function() {
+                // Show progress
+                formDiv.classList.add('d-none');
+                progressDiv.classList.remove('d-none');
+                confirmBtn.disabled = true;
+                
+                // Make API call
+                fetch('{{ url_for("prediction.run_predictions") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Show success and reload
+                        alert(data.message);
+                        window.location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                        formDiv.classList.remove('d-none');
+                        progressDiv.classList.add('d-none');
+                        confirmBtn.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    alert('Error running predictions: ' + error);
                     formDiv.classList.remove('d-none');
                     progressDiv.classList.add('d-none');
                     confirmBtn.disabled = false;
-                }
-            })
-            .catch(error => {
-                alert('Error running predictions: ' + error);
-                formDiv.classList.remove('d-none');
-                progressDiv.classList.add('d-none');
-                confirmBtn.disabled = false;
+                });
             });
-        });
+        }
     }
 });
 </script>

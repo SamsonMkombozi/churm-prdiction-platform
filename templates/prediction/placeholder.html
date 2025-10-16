@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+
+{% block title %}Predictions - Coming Soon{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">
+            <i class="fas fa-brain me-2"></i>Churn Predictions
+        </h1>
+        <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+        </a>
+    </div>
+    
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>
+        <strong>Feature Available!</strong> The prediction system is now ready. 
+        Please ensure your CRM data is synced first.
+    </div>
+    
+    <!-- Placeholder content -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-brain fa-5x text-primary mb-4"></i>
+                    <h3>Churn Prediction Engine</h3>
+                    <p class="text-muted mb-4">
+                        Predict which customers are likely to churn using machine learning.
+                    </p>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <i class="fas fa-users fa-2x text-primary mb-3"></i>
+                                    <h5>Customer Analysis</h5>
+                                    <p class="small text-muted">Analyze customer behavior patterns</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <i class="fas fa-exclamation-triangle fa-2x text-warning mb-3"></i>
+                                    <h5>Risk Assessment</h5>
+                                    <p class="small text-muted">Identify high-risk customers</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <i class="fas fa-chart-line fa-2x text-success mb-3"></i>
+                                    <h5>Actionable Insights</h5>
+                                    <p class="small text-muted">Get recommendations to retain customers</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
