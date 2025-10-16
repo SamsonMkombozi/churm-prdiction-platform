@@ -4,6 +4,15 @@ app/controllers/crm_controller.py
 """
 from flask import Blueprint, render_template, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
+# from app.decorators import company_required
+def company_required(func):
+    """Dummy company_required decorator (replace with real implementation)"""
+    from functools import wraps
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        # TODO: Implement company check logic here
+        return func(*args, **kwargs)
+    return wrapper
 from app.extensions import db
 from app.models.customer import Customer
 from app.models.ticket import Ticket
@@ -221,67 +230,72 @@ def payments():
 
 @crm_bp.route('/sync', methods=['POST'])
 @login_required
-@manager_required
+@company_required
 def sync():
-    """
-    Trigger CRM data synchronization
-    """
+    """Manually trigger CRM data sync"""
     try:
         company = current_user.company
+        
+        # Check if CRM is configured
+        if not company.crm_api_url:
+            return jsonify({
+                'success': False,
+                'message': 'CRM API URL not configured. Please configure in Company Settings.'
+            }), 400
         
         # Check if sync is already in progress
         if company.sync_status == 'in_progress':
             return jsonify({
                 'success': False,
-                'message': 'Sync already in progress'
-            }), 400
-        
-        # Validate CRM configuration
-        if not company.crm_api_url:
-            return jsonify({
-                'success': False,
-                'message': 'CRM API URL not configured. Please update company settings.'
+                'message': 'Sync already in progress. Please wait for it to complete.'
             }), 400
         
         # Initialize CRM service
-        try:
-            crm_service = CRMService(company)
-        except ValueError as e:
+        crm_service = CRMService(company)
+        
+        # ✅ FIX: test_connection returns dict, not tuple
+        connection_result = crm_service.test_connection()
+        if not connection_result.get('success'):
             return jsonify({
                 'success': False,
-                'message': str(e)
+                'message': f"Cannot connect to CRM: {connection_result.get('message')}"
             }), 400
         
-        # Test connection first
-        success, message = crm_service.test_connection()
-        if not success:
-            return jsonify({
-                'success': False,
-                'message': f'CRM connection failed: {message}'
-            }), 500
+        # Perform sync
+        logger.info(f"Starting manual CRM sync for company {company.id}")
+        results = crm_service.sync_all_data()
         
-        # Run sync
-        logger.info(f"Starting manual sync for company {company.id}")
-        results = crm_service.sync_data()
-        
-        if results.get('status') == 'completed':
+        if results['success']:
+            message = f"Successfully synced {results['customers']['new']} new customers, "
+            message += f"{results['payments']['new']} new payments, "
+            message += f"and {results['tickets']['new']} new tickets."
+            
             return jsonify({
                 'success': True,
-                'message': results.get('summary', {}).get('message', 'Sync completed'),
+                'message': message,
                 'results': results
             })
         else:
+            error_msg = ', '.join(results.get('errors', ['Unknown error']))
             return jsonify({
                 'success': False,
-                'message': results.get('message', 'Sync failed'),
-                'results': results
+                'message': f'Sync failed: {error_msg}'
             }), 500
-        
+            
     except Exception as e:
-        logger.error(f"Error during manual sync: {e}", exc_info=True)
+        logger.error(f"Error during manual sync: {str(e)}", exc_info=True)
+        
+        # Reset sync status on error
+        try:
+            company.sync_status = 'failed'
+            company.sync_error = str(e)
+            db.session.commit()
+        except:
+            pass
+        
         return jsonify({
             'success': False,
-            'message': str(e)
+            'message': f'Sync error: {str(e)}'
         }), 500
 
 

@@ -1,26 +1,33 @@
 """
-CRM Service - Habari CRM Integration - FIXED VERSION
+CRM Integration Service - FIXED for Your CRM API
 app/services/crm_service.py
 
-Handles all communication with Habari CRM API
+✅ Uses correct table names:
+   - crm_customers (not customers)
+   - tickets_full (not tickets)  
+   - nav_mpesa_transaction (not payments)
 """
 import requests
-import logging
-import json  # ✅ FIXED: Import from standard library, not flask
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
-from flask import current_app  # ✅ FIXED: Only import current_app from flask
+from typing import Dict, List, Optional
+import logging
 from app.extensions import db
 from app.models.company import Company
-from app.models.customer import Customer
-from app.models.ticket import Ticket
-from app.models.payment import Payment
+from app.repositories.customer_repository import CustomerRepository
+from app.repositories.payment_repository import PaymentRepository
+from app.repositories.ticket_repository import TicketRepository
 
 logger = logging.getLogger(__name__)
 
 
 class CRMService:
-    """Service for Habari CRM integration"""
+    """Service for integrating with Habari CRM API"""
+    
+    # ✅ FIXED: Use correct table names for your CRM
+    CUSTOMER_TABLE = 'crm_customers'  # Not 'customers'
+    TICKET_TABLE = 'tickets_full'     # Not 'tickets'
+    PAYMENT_TABLE = 'nav_mpesa_transaction'  # Not 'payments'
+    USAGE_TABLE = 'spl_statistics'    # ✅ NEW: Usage statistics
     
     def __init__(self, company: Company):
         """
@@ -31,575 +38,464 @@ class CRMService:
         """
         self.company = company
         self.api_url = company.crm_api_url
-        self.timeout = current_app.config.get('CRM_API_TIMEOUT', 30)
+        # ✅ Your CRM doesn't use API key - it's an open API
+        self.api_key = None
+        self.timeout = 30
         
-        # Validate configuration
-        if not self.api_url:
-            raise ValueError("CRM API URL not configured for this company")
+        # Initialize repositories
+        self.customer_repo = CustomerRepository(company)
+        self.payment_repo = PaymentRepository(company)
+        self.ticket_repo = TicketRepository(company)
+        from app.repositories.usage_repository import UsageRepository
+        self.usage_repo = UsageRepository(company)
         
-        try:
-            self.api_key = company.api_key
-        except Exception as e:
-            raise ValueError(f"Failed to decrypt CRM API key: {e}")
+        # Customer ID mapping cache (login -> customer_id)
+        self.customer_mapping = {}
     
-    def _make_request(self, table: str) -> List[Dict]:
+    def sync_all_data(self) -> Dict:
         """
-        Make request to Habari CRM API
-        
-        Args:
-            table: Table name (customers, payments, tickets)
-            
-        Returns:
-            List of records from the API
-        """
-        # Habari CRM API uses query parameters, not paths
-        url = self.api_url
-        params = {'table': table}
-        
-        try:
-            logger.info(f"CRM API Request: GET {url}?table={table}")
-            
-            response = requests.get(
-                url,
-                params=params,
-                timeout=self.timeout
-            )
-            
-            response.raise_for_status()
-            
-            # Parse JSON response - ✅ FIXED: Use standard json module
-            data = response.json()
-            
-            # Handle Habari CRM API response format: {'status': 'success', 'data': [...]}
-            if isinstance(data, dict):
-                # Check status first
-                if data.get('status') == 'success' and 'data' in data:
-                    records = data['data']
-                    logger.info(f"Successfully fetched {len(records) if isinstance(records, list) else 1} records from {table}")
-                    return records if isinstance(records, list) else [records]
-                elif 'data' in data:
-                    # Has data but different status
-                    records = data['data']
-                    return records if isinstance(records, list) else [records]
-                elif 'records' in data:
-                    records = data['records']
-                    return records if isinstance(records, list) else [records]
-                elif 'error' in data:
-                    logger.error(f"CRM API error: {data['error']}")
-                    raise Exception(f"CRM API error: {data['error']}")
-                else:
-                    # Return as single-item list
-                    return [data]
-            elif isinstance(data, list):
-                # Direct list of records
-                return data
-            else:
-                logger.warning(f"Unexpected response type: {type(data)}")
-                return []
-            
-        except requests.exceptions.Timeout:
-            logger.error(f"CRM API timeout: {url}")
-            raise Exception("CRM API request timed out")
-        
-        except requests.exceptions.HTTPError as e:
-            logger.error(f"CRM API HTTP error: {e}")
-            raise Exception(f"CRM API error: {e.response.status_code}")
-        
-        except requests.exceptions.RequestException as e:
-            logger.error(f"CRM API request failed: {e}")
-            raise Exception(f"Failed to connect to CRM: {str(e)}")
-        
-        except json.JSONDecodeError as e:  # ✅ FIXED: Standard json module
-            logger.error(f"Invalid JSON response: {e}")
-            raise Exception("CRM API returned invalid JSON")
-    
-    def test_connection(self) -> Tuple[bool, str]:
-        """
-        Test connection to CRM API
+        Sync all data from CRM
         
         Returns:
-            (success, message) tuple
+            Dictionary with sync results
         """
-        try:
-            # Try to fetch customers (small test)
-            customers = self._make_request('customers')
-            
-            if isinstance(customers, list):
-                return True, f"Connection successful - Found {len(customers)} customers"
-            else:
-                return True, "Connection successful"
-                
-        except Exception as e:
-            return False, str(e)
+        logger.info(f"Starting CRM sync for company: {self.company.name}")
         
-    def sync_all_data(self):
-        """Sync data in correct dependency order"""
-        logger.info("Starting full CRM sync...")
+        # Update sync status
+        self.company.sync_status = 'in_progress'
+        self.company.sync_error = None
+        db.session.commit()
         
         results = {
-            'customers': 0,
-            'subscriptions': 0,
-            'payments': 0,
+            'success': False,
+            'customers': {'new': 0, 'updated': 0, 'skipped': 0},
+            'usage': {'new': 0, 'updated': 0, 'skipped': 0},
+            'payments': {'new': 0, 'updated': 0, 'skipped': 0},
+            'tickets': {'new': 0, 'updated': 0, 'skipped': 0},
             'errors': []
         }
         
         try:
-            # CRITICAL: Sync in dependency order
-            # 1. Customers first (no dependencies)
-            results['customers'] = self.sync_customers()
-            logger.info(f"Synced {results['customers']} customers")
+            # Step 1: Sync customers first (everything depends on them)
+            logger.info("Syncing customers...")
+            customer_results = self._sync_customers()
+            results['customers'] = customer_results
             
-            # 2. Subscriptions (depend on customers)
-            results['subscriptions'] = self.sync_subscriptions()
-            logger.info(f"Synced {results['subscriptions']} subscriptions")
+            # Step 2: Build customer mapping from usage data
+            logger.info("Building customer ID mapping...")
+            self._build_customer_mapping()
             
-            # 3. Payments last (depend on customers)
-            results['payments'] = self.sync_payments()
-            logger.info(f"Synced {results['payments']} payments")
+            # Step 3: Sync usage statistics
+            logger.info("Syncing usage statistics...")
+            usage_results = self._sync_usage()
+            results['usage'] = usage_results
+            
+            # Step 4: Sync payments (uses mapping for better matching)
+            logger.info("Syncing payments...")
+            payment_results = self._sync_payments()
+            results['payments'] = payment_results
+            
+            # Step 5: Sync tickets
+            logger.info("Syncing tickets...")
+            ticket_results = self._sync_tickets()
+            results['tickets'] = ticket_results
+            
+            # Mark as successful
+            results['success'] = True
+            self.company.sync_status = 'completed'
+            self.company.last_sync_at = datetime.utcnow()
+            self.company.total_syncs = (self.company.total_syncs or 0) + 1
+            
+            logger.info(f"Sync completed successfully: {results}")
             
         except Exception as e:
-            logger.error(f"Sync failed: {str(e)}")
+            logger.error(f"Sync failed: {str(e)}", exc_info=True)
+            results['success'] = False
             results['errors'].append(str(e))
+            self.company.sync_status = 'failed'
+            self.company.sync_error = str(e)
+        
+        finally:
+            db.session.commit()
         
         return results
     
-    def fetch_customers(self, limit: int = 1000, 
-                       since: Optional[datetime] = None) -> List[Dict]:
-        """
-        Fetch customers from CRM
+    def _sync_customers(self) -> Dict:
+        """Sync customer data from CRM"""
+        result = {'new': 0, 'updated': 0, 'skipped': 0}
         
-        Args:
-            limit: Maximum number of customers to fetch
-            since: Only fetch customers updated since this date
-            
-        Returns:
-            List of customer dictionaries
-        """
-        try:
-            customers = self._make_request('crm_customers')
-            logger.info(f"Fetched {len(customers)} customers from CRM")
-            return customers
-            
-        except Exception as e:
-            logger.error(f"Failed to fetch customers: {e}")
-            raise
-    
-    def fetch_tickets(self, limit: int = 1000, 
-                     since: Optional[datetime] = None) -> List[Dict]:
-        """
-        Fetch support tickets from CRM
+        # ✅ Fetch from correct table
+        customers_data = self._fetch_data(self.CUSTOMER_TABLE)
         
-        Args:
-            limit: Maximum number of tickets to fetch
-            since: Only fetch tickets updated since this date
-            
-        Returns:
-            List of ticket dictionaries
-        """
-        try:
-            tickets = self._make_request('tickets_full')
-            logger.info(f"Fetched {len(tickets)} tickets from CRM")
-            return tickets
-            
-        except Exception as e:
-            logger.error(f"Failed to fetch tickets: {e}")
-            raise
-    
-    def fetch_payments(self, limit: int = 1000, 
-                      since: Optional[datetime] = None) -> List[Dict]:
-        """
-        Fetch payment transactions from CRM
+        if not customers_data:
+            logger.warning("No customer data received from CRM")
+            return result
         
-        Args:
-            limit: Maximum number of payments to fetch
-            since: Only fetch payments since this date
-            
-        Returns:
-            List of payment dictionaries
-        """
-        try:
-            payments = self._make_request('nav_mpesa_transaction')
-            logger.info(f"Fetched {len(payments)} payments from CRM")
-            return payments
-            
-        except Exception as e:
-            logger.error(f"Failed to fetch payments: {e}")
-            raise
-    
-    def sync_customers(self) -> Dict:
-        """
-        Sync customers from CRM to database
+        logger.info(f"Processing {len(customers_data)} customers...")
         
-        Returns:
-            Dictionary with sync results
-        """
-        from app.repositories.customer_repository import CustomerRepository
-        
-        try:
-            # Fetch customers from CRM
-            customers_data = self.fetch_customers()
-            
-            repo = CustomerRepository(self.company)
-            
-            created = 0
-            updated = 0
-            errors = 0
-            
-            for customer_data in customers_data:
-                try:
-                    is_new = repo.create_or_update(customer_data)
-                    if is_new:
-                        created += 1
-                    else:
-                        updated += 1
-                        
-                except Exception as e:
-                    logger.error(f"Failed to sync customer {customer_data.get('id')}: {e}")
-                    errors += 1
-            
-            # Commit all changes
-            db.session.commit()
-            
-            return {
-                'success': True,
-                'created': created,
-                'updated': updated,
-                'errors': errors,
-                'total': len(customers_data)
-            }
-            
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Customer sync failed: {e}")
-            return {
-                'success': False,
-                'error': str(e)
-            }
-    
-    def sync_tickets(self) -> Dict:
-        """
-        Sync support tickets from CRM to database
-        ✅ FIXED: Handles missing customers gracefully
-        """
-        from app.repositories.ticket_repository import TicketRepository
-        
-        try:
-            # Fetch tickets from CRM
-            tickets_data = self.fetch_tickets()
-            
-            repo = TicketRepository(self.company)
-            
-            created = 0
-            updated = 0
-            skipped = 0  # ✅ NEW: Track skipped tickets
-            errors = 0
-            
-            for ticket_data in tickets_data:
-                try:
-                    result = repo.create_or_update(ticket_data)
-                    
-                    # ✅ FIX: Handle None return (skipped due to missing customer)
-                    if result is True:
-                        created += 1
-                    elif result is False:
-                        updated += 1
-                    elif result is None:
-                        skipped += 1
-                        
-                except Exception as e:
-                    logger.error(f"Failed to sync ticket {ticket_data.get('id')}: {e}")
-                    errors += 1
-            
-            # Commit all changes
-            db.session.commit()
-            
-            # Build message
-            message = f"Synced {created} new, {updated} updated"
-            if skipped > 0:
-                message += f", {skipped} skipped (customers not found)"
-            if errors > 0:
-                message += f", {errors} errors"
-            
-            logger.info(message)
-            
-            return {
-                'success': True,
-                'created': created,
-                'updated': updated,
-                'skipped': skipped,
-                'errors': errors,
-                'total': len(tickets_data),
-                'message': message
-            }
-            
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Ticket sync failed: {e}")
-            return {
-                'success': False,
-                'error': str(e)
-            }
-    
-    def sync_payments(self) -> Dict:
-        """
-        Sync payment transactions from CRM to database
-        ✅ FIXED: Handles missing customers gracefully
-        
-        Returns:
-            Dictionary with sync results
-        """
-        from app.repositories.payment_repository import PaymentRepository
-        
-        try:
-            # Fetch payments from CRM
-            payments_data = self.fetch_payments()
-            
-            repo = PaymentRepository(self.company)
-            
-            created = 0
-            updated = 0
-            skipped = 0  # ✅ NEW: Track skipped payments
-            errors = 0
-            
-            for payment_data in payments_data:
-                try:
-                    result = repo.create_or_update(payment_data)
-                    
-                    # ✅ FIX: Handle None return (skipped due to missing customer)
-                    if result is True:
-                        created += 1
-                    elif result is False:
-                        updated += 1
-                    elif result is None:
-                        skipped += 1
-                        
-                except Exception as e:
-                    logger.error(f"Failed to sync payment {payment_data.get('id')}: {e}")
-                    errors += 1
-            
-            # Commit all changes
-            db.session.commit()
-            
-            # Build message
-            message = f"Synced {created} new, {updated} updated"
-            if skipped > 0:
-                message += f", {skipped} skipped (customers not found)"
-            if errors > 0:
-                message += f", {errors} errors"
-            
-            logger.info(message)
-            
-            return {
-                'success': True,
-                'created': created,
-                'updated': updated,
-                'skipped': skipped,
-                'errors': errors,
-                'total': len(payments_data),
-                'message': message
-            }
-            
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Payment sync failed: {e}")
-            return {
-                'success': False,
-                'error': str(e)
-            }
-            
-            
-    def sync_data(self, full_sync: bool = True) -> Dict:
-        """
-        Perform complete data synchronization
-        
-        Args:
-            full_sync: If True, sync all data. If False, only recent changes.
-            
-        Returns:
-            Dictionary with comprehensive sync results
-        """
-        logger.info(f"Starting {'full' if full_sync else 'incremental'} sync for company {self.company.id}")
-        
-        # ✅ FIX: Check if sync is stuck and reset if needed
-        if self.company.sync_status == 'in_progress':
-            # Check if last sync was more than 10 minutes ago
-            if self.company.last_sync_at:
-                from datetime import timedelta
-                time_since_last = datetime.utcnow() - self.company.last_sync_at
-                if time_since_last > timedelta(minutes=10):
-                    logger.warning(f"Resetting stuck sync status for company {self.company.id}")
-                    self.company.sync_status = 'failed'
-                    self.company.sync_error = 'Previous sync timed out'
-                    db.session.commit()
+        for customer_data in customers_data:
+            try:
+                # ✅ Map your CRM fields to standard fields
+                normalized_data = self._normalize_customer_data(customer_data)
+                
+                # Create or update customer
+                was_created = self.customer_repo.create_or_update(normalized_data)
+                
+                if was_created:
+                    result['new'] += 1
                 else:
-                    # Sync is genuinely in progress
-                    return {
-                        'status': 'error',
-                        'message': 'Sync already in progress. Please wait.'
-                    }
-            else:
-                # No last sync time but status is in_progress - reset it
-                logger.warning(f"Resetting orphaned in_progress status for company {self.company.id}")
-                self.company.sync_status = 'pending'
-                db.session.commit()
+                    result['updated'] += 1
+                    
+            except Exception as e:
+                logger.error(f"Failed to sync customer {customer_data.get('id')}: {str(e)}")
+                result['skipped'] += 1
+                continue
         
-        # Update sync status to in_progress
-        self.company.update_sync_status('in_progress')
-        
-        results = {
-            'status': 'in_progress',
-            'started_at': datetime.utcnow().isoformat(),
-            'customers': {},
-            'tickets': {},
-            'payments': {}
-        }
-        
+        # Commit after all customers
         try:
-        # ... rest of the sync logic
-            # Sync customers
-            logger.info("Syncing customers...")
-            results['customers'] = self.sync_customers()
-            
-            # Sync tickets
-            logger.info("Syncing tickets...")
-            results['tickets'] = self.sync_tickets()
-            
-            # Sync payments
-            logger.info("Syncing payments...")
-            results['payments'] = self.sync_payments()
-            
-            # Calculate totals
-            total_created = (
-                results['customers'].get('created', 0) +
-                results['tickets'].get('created', 0) +
-                results['payments'].get('created', 0)
-            )
-            
-            total_updated = (
-                results['customers'].get('updated', 0) +
-                results['tickets'].get('updated', 0) +
-                results['payments'].get('updated', 0)
-            )
-            
-            # Update company sync status
-            self.company.update_sync_status('completed')
-            
-            results['status'] = 'completed'
-            results['completed_at'] = datetime.utcnow().isoformat()
-            results['summary'] = {
-                'total_created': total_created,
-                'total_updated': total_updated,
-                'message': f'Successfully synced {total_created} new and {total_updated} updated records'
-            }
-            
-            logger.info(f"Sync completed successfully: {results['summary']['message']}")
-            
-            return results
-            
+            db.session.commit()
+            logger.info(f"Synced {result['new']} new, {result['updated']} updated customers")
         except Exception as e:
-            logger.error(f"Sync failed with error: {e}")
-            
-            # Update company sync status to failed
-            self.company.update_sync_status('failed', error=str(e))
-            
-            results['status'] = 'error'
-            results['error'] = str(e)
-            results['message'] = f'Sync failed: {str(e)}'
-            
-            return results
+            logger.error(f"Failed to commit customers: {str(e)}")
+            db.session.rollback()
+            raise
+        
+        return result
     
-    def sync_incremental(self) -> Dict:
+    def _sync_payments(self) -> Dict:
+        """Sync payment data from CRM"""
+        result = {'new': 0, 'updated': 0, 'skipped': 0}
+        
+        # ✅ Fetch from correct table
+        payments_data = self._fetch_data(self.PAYMENT_TABLE)
+        
+        if not payments_data:
+            logger.warning("No payment data received from CRM")
+            return result
+        
+        logger.info(f"Processing {len(payments_data)} payments...")
+        
+        for payment_data in payments_data:
+            try:
+                # ✅ Map your CRM fields to standard fields
+                normalized_data = self._normalize_payment_data(payment_data)
+                
+                # Create or update payment
+                was_created = self.payment_repo.create_or_update(normalized_data)
+                
+                if was_created is True:
+                    result['new'] += 1
+                elif was_created is False:
+                    result['updated'] += 1
+                else:  # None = skipped
+                    result['skipped'] += 1
+                    
+            except Exception as e:
+                logger.error(f"Failed to sync payment {payment_data.get('id')}: {str(e)}")
+                result['skipped'] += 1
+                continue
+        
+        # Commit after all payments
+        try:
+            db.session.commit()
+            logger.info(f"Synced {result['new']} new, {result['updated']} updated, {result['skipped']} skipped (customers not found)")
+        except Exception as e:
+            logger.error(f"Failed to commit payments: {str(e)}")
+            db.session.rollback()
+            raise
+        
+        return result
+    
+    def _build_customer_mapping(self):
         """
-        Sync only recent changes (since last sync)
+        Build mapping between login IDs (SHO000XXX, CUST-XXX) and customer IDs
+        Uses spl_statistics table which has both customer_id and login
+        """
+        logger.info("Fetching usage data to build customer mapping...")
+        usage_data = self._fetch_data(self.USAGE_TABLE)
+        
+        if not usage_data:
+            logger.warning("No usage data available for mapping")
+            return
+        
+        # Build mapping: login -> crm_customer_id
+        for record in usage_data:
+            login = record.get('login')
+            customer_id = record.get('customer_id')
+            
+            if login and customer_id:
+                self.customer_mapping[login] = str(customer_id)
+        
+        logger.info(f"Built mapping for {len(self.customer_mapping)} login IDs")
+    
+    def _sync_usage(self) -> Dict:
+        """Sync usage statistics from CRM"""
+        result = {'new': 0, 'updated': 0, 'skipped': 0}
+        
+        # ✅ Fetch from correct table
+        usage_data = self._fetch_data(self.USAGE_TABLE)
+        
+        if not usage_data:
+            logger.warning("No usage data received from CRM")
+            return result
+        
+        logger.info(f"Processing {len(usage_data)} usage records...")
+        
+        for usage_record in usage_data:
+            try:
+                # Create or update usage record
+                was_created = self.usage_repo.create_or_update(usage_record)
+                
+                if was_created is True:
+                    result['new'] += 1
+                elif was_created is False:
+                    result['updated'] += 1
+                else:  # None = skipped
+                    result['skipped'] += 1
+                    
+            except Exception as e:
+                logger.debug(f"Failed to sync usage {usage_record.get('id')}: {str(e)}")
+                result['skipped'] += 1
+                continue
+        
+        # Commit after all usage records
+        try:
+            db.session.commit()
+            logger.info(f"Synced {result['new']} new, {result['updated']} updated usage records")
+        except Exception as e:
+            logger.error(f"Failed to commit usage: {str(e)}")
+            db.session.rollback()
+            raise
+        
+        return result
+    
+    def _sync_tickets(self) -> Dict:
+        """Sync ticket data from CRM"""
+        result = {'new': 0, 'updated': 0, 'skipped': 0}
+        
+        # ✅ Fetch from correct table
+        tickets_data = self._fetch_data(self.TICKET_TABLE)
+        
+        if not tickets_data:
+            logger.warning("No ticket data received from CRM")
+            return result
+        
+        logger.info(f"Processing {len(tickets_data)} tickets...")
+        
+        for ticket_data in tickets_data:
+            try:
+                # ✅ Map your CRM fields to standard fields
+                normalized_data = self._normalize_ticket_data(ticket_data)
+                
+                # Create or update ticket
+                was_created = self.ticket_repo.create_or_update(normalized_data)
+                
+                if was_created is True:
+                    result['new'] += 1
+                elif was_created is False:
+                    result['updated'] += 1
+                else:  # None = skipped
+                    result['skipped'] += 1
+                    
+            except Exception as e:
+                logger.error(f"Failed to sync ticket {ticket_data.get('ticket_id')}: {str(e)}")
+                result['skipped'] += 1
+                continue
+        
+        # Commit after all tickets
+        try:
+            db.session.commit()
+            logger.info(f"Synced {result['new']} new, {result['updated']} updated, {result['skipped']} skipped (customers not found)")
+        except Exception as e:
+            logger.error(f"Failed to commit tickets: {str(e)}")
+            db.session.rollback()
+            raise
+        
+        return result
+    
+    def _fetch_data(self, table_name: str) -> List[Dict]:
+        """
+        Fetch data from CRM API
+        
+        Args:
+            table_name: Name of the table to fetch
+            
+        Returns:
+            List of records
+        """
+        try:
+            url = f"{self.api_url}?table={table_name}"
+            
+            logger.info(f"Fetching from: {url}")
+            
+            response = requests.get(url, timeout=self.timeout)
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            # Handle different response formats
+            if isinstance(data, dict):
+                if 'error' in data:
+                    logger.error(f"API error: {data['error']}")
+                    return []
+                
+                # Try different keys
+                records = data.get('data') or data.get('records') or [data]
+            elif isinstance(data, list):
+                records = data
+            else:
+                logger.warning(f"Unexpected response format for {table_name}")
+                return []
+            
+            logger.info(f"Fetched {len(records)} records from {table_name}")
+            return records
+            
+        except requests.exceptions.Timeout:
+            logger.error(f"Timeout fetching {table_name}")
+            raise
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request error fetching {table_name}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error fetching {table_name}: {e}")
+            raise
+    
+    # ✅ NORMALIZATION METHODS - Map your CRM fields to standard fields
+    
+    def _normalize_customer_data(self, data: Dict) -> Dict:
+        """
+        Normalize customer data from your CRM format to standard format
+        
+        Your CRM fields → Standard fields
+        """
+        return {
+            'id': data.get('id'),
+            'name': data.get('customer_name'),  # ✅ Your CRM uses 'customer_name'
+            'email': data.get('customer_email'),
+            'phone': data.get('customer_phone'),
+            'address': data.get('address'),
+            'status': data.get('connection_status') or data.get('status'),  # ✅ Your CRM has both
+            'account_type': data.get('classification'),  # ✅ Your CRM uses 'classification'
+            'monthly_charges': self._parse_float(data.get('customer_balance')),
+            'total_charges': 0.0,  # Not available in your CRM
+            'outstanding_balance': self._parse_float(data.get('customer_balance')),
+            'service_type': data.get('category'),  # ✅ Your CRM uses 'category'
+            'connection_type': data.get('routers'),  # ✅ Your CRM uses 'routers'
+            'bandwidth_plan': data.get('package'),  # ✅ Your CRM uses 'package'
+            'signup_date': data.get('date_installed') or data.get('created_at'),  # ✅ Use install date
+            'disconnection_date': data.get('disconnection_date'),
+            'churned_date': data.get('churned_date'),
+            'region': data.get('splynx_location'),  # ✅ Your CRM has location
+            'sector': data.get('sector'),
+            'billing_frequency': data.get('billing_frequency')
+        }
+    
+    def _normalize_payment_data(self, data: Dict) -> Dict:
+        """
+        Normalize payment data from your CRM format to standard format
+        
+        Your CRM fields → Standard fields
+        """
+        # ✅ Extract customer reference from account_no
+        account_no = data.get('account_no')
+        
+        # Your payments have formats like:
+        # - "CUST-885" (needs to extract just "885")
+        # - "1014000001" (numeric)
+        # - "SHO000000208" (alphanumeric)
+        customer_ref = account_no
+        
+        # Try to extract numeric part from CUST-XXX format
+        if account_no and 'CUST-' in str(account_no):
+            try:
+                # Extract number after CUST-, pad to 5 digits
+                num = str(account_no).split('CUST-')[1]
+                customer_ref = num.zfill(5)  # e.g., "885" -> "00885"
+            except:
+                customer_ref = account_no
+        
+        return {
+            'id': data.get('id'),
+            'account_no': customer_ref,  # ✅ Normalized customer reference
+            'payer': data.get('payer'),  # ✅ Backup field (payer name)
+            'transaction_id': data.get('mpesa_ref'),  # ✅ Your CRM uses 'mpesa_ref'
+            'transaction_amount': self._parse_float(data.get('tx_amount')),  # ✅ Your CRM uses 'tx_amount'
+            'transaction_time': data.get('tx_time'),  # ✅ Your CRM uses 'tx_time'
+            'phone_number': data.get('phone_no'),  # ✅ Your CRM uses 'phone_no'
+            'transaction_type': data.get('transaction_type') or 'payment',
+            'status': 'completed' if data.get('posted_to_ledgers') == '1' else 'pending',  # ✅ Your CRM logic
+            'created_at': data.get('created_at')
+        }
+    
+    def _normalize_ticket_data(self, data: Dict) -> Dict:
+        """
+        Normalize ticket data from your CRM format to standard format
+        
+        Your CRM fields → Standard fields
+        """
+        # ✅ CRITICAL: Convert customer_no (e.g., "03505") to match customer ID format
+        customer_no = data.get('customer_no')
+        
+        # Your CRM customers have IDs like "00001", tickets have "03505"
+        # We need to pad/format to match
+        if customer_no:
+            # Remove leading zeros and re-pad to 5 digits to match customer ID format
+            try:
+                customer_id = str(int(customer_no)).zfill(5)
+            except (ValueError, TypeError):
+                customer_id = customer_no
+        else:
+            customer_id = None
+        
+        return {
+            'id': data.get('ticket_id'),  # ✅ Your CRM uses 'ticket_id'
+            'customer_no': customer_id,  # ✅ Normalized customer reference
+            'subject': data.get('subject'),
+            'message': data.get('message') or data.get('description'),
+            'status': data.get('status'),
+            'priority': data.get('priority'),
+            'category_id': data.get('category_name'),  # ✅ Your CRM has category info
+            'assigned_to': data.get('assigned_to'),
+            'department_id': data.get('department_id'),
+            'created_at': data.get('created_at'),
+            'resolution_description': data.get('resolution_description'),
+            'solutions_checklist': data.get('solutions_checklist')
+        }
+    
+    # Helper methods
+    
+    @staticmethod
+    def _parse_float(value) -> float:
+        """Parse float value safely"""
+        if value is None or value == '':
+            return 0.0
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return 0.0
+    
+    def test_connection(self) -> Dict:
+        """
+        Test CRM API connection
         
         Returns:
-            Dictionary with sync results
+            Dictionary with test results
         """
-        # Get last sync time
-        since = self.company.last_sync_at
-        
-        if not since:
-            # No previous sync, do full sync
-            return self.sync_data(full_sync=True)
-        
-        logger.info(f"Incremental sync since {since}")
-        
-        # Perform incremental sync
-        return self.sync_data(full_sync=False)
-
-
-# Utility functions for background sync tasks
-
-def sync_company_data(company_id: int) -> Dict:
-    """
-    Sync data for a specific company (can be used as background task)
-    
-    Args:
-        company_id: Company ID to sync
-        
-    Returns:
-        Sync results dictionary
-    """
-    company = Company.query.get(company_id)
-    
-    if not company:
-        return {'status': 'error', 'message': 'Company not found'}
-    
-    if not company.is_active:
-        return {'status': 'error', 'message': 'Company is inactive'}
-    
-    try:
-        crm_service = CRMService(company)
-        return crm_service.sync_data()
-        
-    except Exception as e:
-        logger.error(f"Failed to sync company {company_id}: {e}")
-        return {'status': 'error', 'message': str(e)}
-
-
-def sync_all_companies() -> Dict:
-    """
-    Sync data for all active companies
-    
-    Returns:
-        Summary of sync results for all companies
-    """
-    companies = Company.query.filter_by(is_active=True).all()
-    
-    results = {
-        'total_companies': len(companies),
-        'successful': 0,
-        'failed': 0,
-        'details': []
-    }
-    
-    for company in companies:
-        logger.info(f"Syncing company: {company.name}")
-        
         try:
-            sync_result = sync_company_data(company.id)
+            # Try to fetch a small amount of customer data
+            url = f"{self.api_url}?table={self.CUSTOMER_TABLE}&limit=1"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
             
-            if sync_result.get('status') == 'completed':
-                results['successful'] += 1
-            else:
-                results['failed'] += 1
+            data = response.json()
             
-            results['details'].append({
-                'company_id': company.id,
-                'company_name': company.name,
-                'result': sync_result
-            })
-            
+            return {
+                'success': True,
+                'message': 'Connection successful',
+                'data': data
+            }
         except Exception as e:
-            logger.error(f"Failed to sync {company.name}: {e}")
-            results['failed'] += 1
-            results['details'].append({
-                'company_id': company.id,
-                'company_name': company.name,
-                'error': str(e)
-            })
-    
-    return results
-
-
- 
+            return {
+                'success': False,
+                'message': f'Connection failed: {str(e)}'
+            }

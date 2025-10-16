@@ -1,12 +1,17 @@
 """
-Customer Repository - Data access layer for customers
+Customer Repository - FIXED VERSION with NULL handling
 app/repositories/customer_repository.py
+
+Handles customers with missing/NULL names gracefully
 """
 from datetime import datetime
 from typing import List, Optional, Dict
 from app.extensions import db
 from app.models.customer import Customer
 from app.models.company import Company
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class CustomerRepository:
@@ -109,6 +114,7 @@ class CustomerRepository:
     def create(self, customer_data: Dict) -> Customer:
         """
         Create new customer from dictionary
+        ✅ FIXED: Handles missing customer names gracefully
         
         Args:
             customer_data: Dictionary with customer data
@@ -116,22 +122,35 @@ class CustomerRepository:
         Returns:
             Created customer instance
         """
+        # ✅ FIX: Generate default name if missing
+        customer_name = self._get_customer_name(customer_data)
+        
+        # ✅ FIX: Validate required field
+        if not customer_name:
+            crm_id = customer_data.get('id') or customer_data.get('customer_id')
+            customer_name = f"Customer {crm_id}" if crm_id else "Unknown Customer"
+            logger.warning(f"Customer {crm_id} has no name - using default: {customer_name}")
+        
         customer = Customer(
             company_id=self.company_id,
-            crm_customer_id=customer_data.get('id'),
-            customer_name=customer_data.get('name'),
+            crm_customer_id=str(customer_data.get('id') or customer_data.get('customer_id')),
+            customer_name=customer_name,
             email=customer_data.get('email'),
-            phone=customer_data.get('phone'),
-            address=customer_data.get('address'),
-            status=customer_data.get('status', 'active'),
+            phone=customer_data.get('phone') or customer_data.get('mobile'),
+            address=customer_data.get('address') or customer_data.get('location'),
+            status=self._normalize_status(customer_data.get('status') or customer_data.get('connection_status', 'active')),
             account_type=customer_data.get('account_type'),
-            monthly_charges=customer_data.get('monthly_charges', 0.0),
-            total_charges=customer_data.get('total_charges', 0.0),
-            outstanding_balance=customer_data.get('outstanding_balance', 0.0),
+            monthly_charges=float(customer_data.get('monthly_charges', 0) or 0),
+            total_charges=float(customer_data.get('total_charges', 0) or 0),
+            outstanding_balance=float(customer_data.get('outstanding_balance', 0) or 0),
             service_type=customer_data.get('service_type'),
             connection_type=customer_data.get('connection_type'),
-            bandwidth_plan=customer_data.get('bandwidth_plan'),
-            signup_date=self._parse_date(customer_data.get('signup_date')),
+            bandwidth_plan=customer_data.get('bandwidth_plan') or customer_data.get('package'),
+            signup_date=self._parse_date(
+                customer_data.get('signup_date') or 
+                customer_data.get('date_installed') or 
+                customer_data.get('created_at')
+            ),
             synced_at=datetime.utcnow()
         )
         
@@ -145,6 +164,7 @@ class CustomerRepository:
     def update(self, customer: Customer, customer_data: Dict) -> Customer:
         """
         Update existing customer from dictionary
+        ✅ FIXED: Handles missing names gracefully
         
         Args:
             customer: Customer instance to update
@@ -153,23 +173,46 @@ class CustomerRepository:
         Returns:
             Updated customer instance
         """
-        # Update fields
-        customer.customer_name = customer_data.get('name', customer.customer_name)
-        customer.email = customer_data.get('email', customer.email)
-        customer.phone = customer_data.get('phone', customer.phone)
-        customer.address = customer_data.get('address', customer.address)
-        customer.status = customer_data.get('status', customer.status)
+        # ✅ FIX: Only update name if new name is provided
+        new_name = self._get_customer_name(customer_data)
+        if new_name:
+            customer.customer_name = new_name
+        
+        # Update other fields
+        if customer_data.get('email'):
+            customer.email = customer_data.get('email')
+        if customer_data.get('phone') or customer_data.get('mobile'):
+            customer.phone = customer_data.get('phone') or customer_data.get('mobile')
+        if customer_data.get('address') or customer_data.get('location'):
+            customer.address = customer_data.get('address') or customer_data.get('location')
+        
+        # Update status
+        if 'status' in customer_data or 'connection_status' in customer_data:
+            customer.status = self._normalize_status(
+                customer_data.get('status') or customer_data.get('connection_status')
+            )
+        
         customer.account_type = customer_data.get('account_type', customer.account_type)
-        customer.monthly_charges = customer_data.get('monthly_charges', customer.monthly_charges)
-        customer.total_charges = customer_data.get('total_charges', customer.total_charges)
-        customer.outstanding_balance = customer_data.get('outstanding_balance', customer.outstanding_balance)
+        customer.monthly_charges = float(customer_data.get('monthly_charges', customer.monthly_charges) or 0)
+        customer.total_charges = float(customer_data.get('total_charges', customer.total_charges) or 0)
+        customer.outstanding_balance = float(customer_data.get('outstanding_balance', customer.outstanding_balance) or 0)
         customer.service_type = customer_data.get('service_type', customer.service_type)
         customer.connection_type = customer_data.get('connection_type', customer.connection_type)
-        customer.bandwidth_plan = customer_data.get('bandwidth_plan', customer.bandwidth_plan)
+        
+        bandwidth = customer_data.get('bandwidth_plan') or customer_data.get('package')
+        if bandwidth:
+            customer.bandwidth_plan = bandwidth
         
         # Update dates
-        if 'signup_date' in customer_data:
-            customer.signup_date = self._parse_date(customer_data['signup_date'])
+        signup_date_str = (
+            customer_data.get('signup_date') or 
+            customer_data.get('date_installed') or 
+            customer_data.get('created_at')
+        )
+        if signup_date_str:
+            parsed_date = self._parse_date(signup_date_str)
+            if parsed_date:
+                customer.signup_date = parsed_date
         
         customer.updated_at = datetime.utcnow()
         customer.synced_at = datetime.utcnow()
@@ -189,13 +232,14 @@ class CustomerRepository:
         Returns:
             True if created, False if updated
         """
-        crm_id = customer_data.get('id')
+        crm_id = customer_data.get('id') or customer_data.get('customer_id')
         
         if not crm_id:
+            logger.warning("Customer data missing ID field - skipping")
             raise ValueError("Customer data must have 'id' field")
         
         # Check if customer exists
-        customer = self.get_by_crm_id(crm_id)
+        customer = self.get_by_crm_id(str(crm_id))
         
         if customer:
             # Update existing
@@ -270,13 +314,97 @@ class CustomerRepository:
         
         db.session.commit()
     
+    # ✅ HELPER METHODS
+    
+    def _get_customer_name(self, customer_data: Dict) -> Optional[str]:
+        """
+        Extract customer name from various possible fields
+        
+        Args:
+            customer_data: Customer data dictionary
+            
+        Returns:
+            Customer name or None
+        """
+        # Try multiple possible field names
+        possible_name_fields = [
+            'name',
+            'customer_name',  # ✅ Your CRM uses this
+            'full_name',
+            'account_name',
+            'client_name',
+            'payer'  # ✅ Fallback for payments
+        ]
+        
+        for field in possible_name_fields:
+            name = customer_data.get(field)
+            # Check if name exists and is not empty/None/whitespace
+            if name and str(name).strip() and str(name).strip().lower() not in ['none', 'null', '']:
+                return str(name).strip()
+        
+        # ✅ If no name found, generate one from ID
+        customer_id = customer_data.get('id') or customer_data.get('customer_id')
+        if customer_id:
+            logger.warning(f"Customer {customer_id} has no name - will use default")
+        
+        return None
+    
+    @staticmethod
+    def _normalize_status(status: str) -> str:
+        """
+        Normalize customer status to standard values
+        
+        Args:
+            status: Raw status value
+            
+        Returns:
+            Normalized status (active/inactive/suspended)
+        """
+        if not status:
+            return 'active'
+        
+        status_lower = str(status).lower().strip()
+        
+        # Map various status values
+        if status_lower in ['1', 'active', 'connected', 'true', 'yes']:
+            return 'active'
+        elif status_lower in ['0', 'inactive', 'disconnected', 'false', 'no']:
+            return 'inactive'
+        elif status_lower in ['suspended', 'hold', 'paused']:
+            return 'suspended'
+        else:
+            # Default to active if unknown
+            return 'active'
+    
     @staticmethod
     def _parse_date(date_string: str) -> Optional[datetime]:
-        """Parse date string to datetime"""
+        """
+        Parse date string to datetime
+        
+        Args:
+            date_string: Date string in various formats
+            
+        Returns:
+            Datetime object or None
+        """
         if not date_string:
             return None
         
-        try:
-            return datetime.fromisoformat(date_string.replace('Z', '+00:00'))
-        except (ValueError, AttributeError):
+        # Skip invalid dates
+        if str(date_string).strip() in ['0000-00-00', '0000-00-00 00:00:00', 'None', '']:
             return None
+        
+        try:
+            # ISO format with timezone
+            return datetime.fromisoformat(str(date_string).replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            try:
+                # MySQL datetime format
+                return datetime.strptime(str(date_string), '%Y-%m-%d %H:%M:%S')
+            except (ValueError, AttributeError):
+                try:
+                    # Date only format
+                    return datetime.strptime(str(date_string), '%Y-%m-%d')
+                except (ValueError, AttributeError):
+                    logger.warning(f"Could not parse date: {date_string}")
+                    return None

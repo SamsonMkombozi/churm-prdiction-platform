@@ -49,7 +49,7 @@ class CRMDataFetcher:
             List of records
         """
         try:
-            url = f"{self.base_url}?table={table_name}"
+            url = f"{self.base_url}?table={table_name}&limit=10"
             print(f"📡 Fetching {table_name} from: {url}")
             
             response = requests.get(url, timeout=self.timeout)
