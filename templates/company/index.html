@@ -11,7 +11,7 @@
                 <div class="card shadow-lg mb-4">
                     <div class="card-body text-center py-5">
                         <i class="fas fa-chart-line fa-4x text-primary mb-4"></i>
-                        <h1 class="display-4 mb-3">Welcome to ChurnPredict Pro</h1>
+                        <h1 class="display-4 mb-3">Welcome to {{ company.name }} CRM</h1>
                         <p class="lead text-muted mb-4">
                             {% if current_user.is_authenticated %}
                                 Hello, {{ current_user.full_name }}!
@@ -108,35 +108,7 @@
                     </div>
                 </div>
 
-                <!-- Phase Status -->
-                <div class="card border-success mt-4">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="mb-0">
-                            <i class="fas fa-check-circle me-2"></i>Implementation Status
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <h6 class="text-success">✅ Completed Phases:</h6>
-                                <ul class="list-unstyled">
-                                    <li><i class="fas fa-check text-success me-2"></i>Phase 1: Project Setup</li>
-                                    <li><i class="fas fa-check text-success me-2"></i>Phase 2: Authentication</li>
-                                    <li><i class="fas fa-check text-success me-2"></i>Phase 3: Multi-tenant System</li>
-                                    <li><i class="fas fa-check text-success me-2"></i>Phase 4: CRM Integration</li>
-                                </ul>
-                            </div>
-                            <div class="col-md-6">
-                                <h6 class="text-muted">📋 Upcoming Phases:</h6>
-                                <ul class="list-unstyled">
-                                    <li><i class="far fa-square text-muted me-2"></i>Phase 5: ML Model Setup</li>
-                                    <li><i class="far fa-square text-muted me-2"></i>Phase 6: Prediction Engine</li>
-                                    <li><i class="far fa-square text-muted me-2"></i>Phase 7: Analytics Dashboard</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+ 
             </div>
         </div>
     </div>
