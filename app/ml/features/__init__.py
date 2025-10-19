@@ -1,6 +1,4 @@
 """
-Feature Engineering Package
+ML Features Module
+Feature engineering and preprocessing utilities
 """
-from app.ml.features.feature_engineering import FeatureEngineering
-
-__all__ = ['FeatureEngineering']

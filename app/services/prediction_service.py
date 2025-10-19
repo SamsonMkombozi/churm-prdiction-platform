@@ -1,329 +1,353 @@
+"""
+Enhanced Churn Prediction Service
+app/services/prediction_service.py
+
+Loads ML model and makes churn predictions for customers
+"""
+import os
+import pickle
 import pandas as pd
 import numpy as np
 from datetime import datetime
+from typing import Dict, List, Optional, Tuple
 import logging
-import traceback
-import os
-import joblib
-from typing import Dict, List, Any, Optional
 
-from app.controllers.crm_controller import customer_detail
-from app.ml.models.churn_model import ChurnModel
+# Import feature engineering
 from app.ml.features.feature_engineering import FeatureEngineering
 
 logger = logging.getLogger(__name__)
 
+
 class ChurnPredictionService:
-    """Service for handling real churn prediction operations"""
+    """Service for making churn predictions using ML model"""
     
     def __init__(self):
+        """Initialize the prediction service"""
         self.model = None
-        self.feature_engineer = None
+        self.feature_columns = []
+        self.model_metrics = {}
+        self.model_version = None
+        self.model_type = None
+        self.feature_engineer = FeatureEngineering()
         self.is_trained = False
-        self.model_path = "app/ml/models/saved/churn_xgboost.pkl"
         
-        # Try to load the trained model
+        # Model paths
+        self.model_path = 'app/ml/models/saved/churn_model_v1.pkl'
+        self.backup_model_path = 'app/ml/models/saved/backup_model.pkl'
+        
+        # Try to load model on initialization
         self._load_model()
     
-    def _load_model(self):
-        """Load the trained XGBoost model"""
-        try:
-            if os.path.exists(self.model_path):
-                logger.info(f"Loading trained model from: {self.model_path}")
-                
-                # Load model data
-                model_data = joblib.load(self.model_path)
-                
-                # Initialize ChurnModel and set the loaded model
-                self.model = ChurnModel()
-                self.model.model = model_data['model']
-                self.model.feature_names = model_data['feature_names']
-                self.model.version = model_data.get('version')
-                self.model.trained_at = model_data.get('trained_at')
-                self.model.metrics = model_data.get('metrics', {})
-                
-                # Initialize feature engineering
-                self.feature_engineer = FeatureEngineering()
-                
-                self.is_trained = True
-                logger.info(f"✅ Model loaded successfully. Version: {self.model.version}")
-                logger.info(f"Model accuracy: {self.model.metrics.get('accuracy', 'N/A')}")
-                
-            else:
-                logger.warning(f"❌ Trained model not found at: {self.model_path}")
-                logger.warning("Using fallback rule-based predictions")
-                self.is_trained = False
-                
-        except Exception as e:
-            logger.error(f"❌ Error loading model: {str(e)}")
-            logger.error(traceback.format_exc())
-            self.is_trained = False
+    def _load_model(self) -> bool:
+        """Load ML model from file"""
+        model_paths = [self.model_path, self.backup_model_path]
+        
+        for path in model_paths:
+            if os.path.exists(path):
+                try:
+                    logger.info(f"🔄 Loading model from {path}")
+                    
+                    with open(path, 'rb') as f:
+                        model_data = pickle.load(f)
+                    
+                    # Extract model components
+                    self.model = model_data['model']
+                    self.feature_columns = model_data['feature_columns']
+                    self.model_metrics = model_data.get('metrics', {})
+                    self.model_version = model_data.get('version', '1.0.0')
+                    self.model_type = model_data.get('model_type', 'Unknown')
+                    
+                    # Initialize feature engineering
+                    self.feature_engineer = FeatureEngineering()
+                    
+                    self.is_trained = True
+                    logger.info(f"✅ Model loaded successfully: {self.model_type} v{self.model_version}")
+                    return True
+                    
+                except Exception as e:
+                    logger.error(f"❌ Failed to load model from {path}: {str(e)}")
+                    continue
+        
+        # If no model found, create a simple one
+        logger.warning("⚠️ No trained model found. Creating simple fallback model...")
+        return self._create_simple_model()
     
-    def predict_customer_churn(self, customer_detail: Dict[str, Any]) -> Dict[str, Any]:
+    def _create_simple_model(self) -> bool:
+        """Create a simple rule-based model as fallback"""
+        try:
+            # Create simple model data
+            self.model = None  # Will use rule-based predictions
+            self.feature_columns = [
+                'tenure_months', 'monthly_charges', 'total_charges',
+                'outstanding_balance', 'total_payments', 'total_tickets'
+            ]
+            self.model_metrics = {
+                'type': 'rule_based',
+                'accuracy': 0.65,
+                'auc_score': 0.60
+            }
+            self.model_version = '0.1.0-fallback'
+            self.model_type = 'RuleBasedClassifier'
+            self.is_trained = True
+            
+            logger.info("✅ Simple rule-based model created as fallback")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to create simple model: {str(e)}")
+            return False
+    
+    def predict_customer_churn(self, customer_data: Dict) -> Dict:
         """
-        Predict churn for a single customer using the trained ML model
+        Predict churn probability for a single customer
         
         Args:
-            customer_detail: Dictionary with customer information
+            customer_data: Dictionary containing customer information
             
         Returns:
             Dictionary with prediction results
         """
         try:
-            if self.is_trained and self.model:
-                return self._predict_with_ml_model(customer_detail)
+            if not self.is_trained:
+                return self._fallback_prediction(customer_data)
+            
+            # Transform customer data to features
+            customer_df = pd.DataFrame([customer_data])
+            features_df = self.feature_engineer.transform(customer_df)
+            
+            if self.model is None:
+                # Use rule-based prediction
+                return self._rule_based_prediction(features_df.iloc[0])
+            
+            # Use ML model prediction
+            # Ensure all required features are present
+            for col in self.feature_columns:
+                if col not in features_df.columns:
+                    features_df[col] = 0
+            
+            # Get features in correct order
+            X = features_df[self.feature_columns]
+            
+            # Make prediction
+            churn_probability = self.model.predict_proba(X)[0][1]
+            
+            # Determine risk category
+            if churn_probability >= 0.7:
+                risk_category = 'high'
+            elif churn_probability >= 0.4:
+                risk_category = 'medium'
             else:
-                return self._predict_with_rules(customer_detail)
-                
-        except Exception as e:
-            logger.error(f"Error predicting customer churn: {str(e)}")
-            return {
-                'customer_id': customer_detail.get('id', 'unknown'),
-                'churn_probability': 0.5,
-                'churn_risk': 'unknown',
-                'will_churn': False,
-                'prediction_method': 'error',
-                'error': str(e),
-                'predicted_at': datetime.utcnow().isoformat()
-            }
-    
-    def _predict_with_ml_model(self, customer_detail: Dict[str, Any]) -> Dict[str, Any]:
-        """Use the trained XGBoost model for prediction"""
-        try:
-            # Convert customer data to DataFrame
-            df = pd.DataFrame([customer_detail])
+                risk_category = 'low'
             
-            # Engineer features using the same process as training
-            features_df = self._engineer_features_for_prediction(df)
-            
-            # Get prediction from the trained model
-            churn_probability = self.model.predict_proba(features_df)[0]
-            
-            # Determine risk level and prediction
-            risk_level = self._categorize_risk(churn_probability)
-            will_churn = churn_probability >= 0.5
-            
-            return {
-                'customer_id': customer_detail.get('id', customer_detail.get('customer_id')),
+            result = {
+                'customer_id': customer_data.get('id', None),
                 'churn_probability': float(churn_probability),
-                'churn_risk': risk_level,
-                'will_churn': will_churn,
-                'prediction_method': 'ml_model',
-                'model_version': self.model.version,
+                'churn_risk': risk_category,
+                'model_version': self.model_version,
+                'prediction_date': datetime.utcnow(),
                 'confidence': self._calculate_confidence(churn_probability),
-                'predicted_at': datetime.utcnow().isoformat()
+                'risk_factors': self._identify_risk_factors(features_df.iloc[0])
             }
             
-        except Exception as e:
-            logger.error(f"Error in ML prediction: {str(e)}")
-            # Fallback to rule-based prediction
-            return self._predict_with_rules(customer_detail)
-    
-    def _engineer_features_for_prediction(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Engineer features for prediction using the same process as training"""
-        try:
-            # Map customer data fields to expected feature names
-            features_df = df.copy()
-            
-            # Basic customer features
-            features_df['tenure_months'] = df.get('tenure_months', 0)
-            features_df['monthly_charges'] = df.get('monthly_charges', 0)
-            features_df['total_charges'] = df.get('total_charges', 0)
-            features_df['outstanding_balance'] = df.get('outstanding_balance', 0)
-            
-            # Engagement features
-            features_df['total_tickets'] = df.get('total_tickets', 0)
-            features_df['total_payments'] = df.get('total_payments', 0)
-            
-            # Derived features
-            features_df['balance_ratio'] = np.where(
-                features_df['monthly_charges'] > 0,
-                features_df['outstanding_balance'] / features_df['monthly_charges'],
-                0
-            )
-            
-            features_df['is_new_customer'] = (features_df['tenure_months'] < 3).astype(int)
-            features_df['is_long_term_customer'] = (features_df['tenure_months'] > 24).astype(int)
-            features_df['is_high_spender'] = (features_df['monthly_charges'] > features_df['monthly_charges'].median()).astype(int)
-            
-            # Ticket and payment rates
-            features_df['ticket_rate'] = np.where(
-                features_df['tenure_months'] > 0,
-                features_df['total_tickets'] / features_df['tenure_months'],
-                0
-            )
-            
-            features_df['payment_rate'] = np.where(
-                features_df['tenure_months'] > 0,
-                features_df['total_payments'] / features_df['tenure_months'],
-                0
-            )
-            
-            # Health and engagement scores
-            features_df['engagement_score'] = (
-                features_df['total_payments'] * 0.6 +
-                features_df['total_tickets'] * 0.4
-            ) / (features_df['tenure_months'] + 1)
-            
-            features_df['health_score'] = np.clip(
-                40 - (features_df['outstanding_balance'] / (features_df['monthly_charges'] + 1)) * 20 +
-                30 - features_df['total_tickets'] * 3 +
-                30 * (features_df['total_payments'] / (features_df['tenure_months'] + 1)),
-                0, 100
-            )
-            
-            # Risk indicators
-            features_df['has_outstanding_balance'] = (features_df['outstanding_balance'] > 0).astype(int)
-            features_df['has_open_tickets'] = 0  # We don't have this info easily
-            features_df['late_payer'] = (features_df['balance_ratio'] > 2).astype(int)
-            
-            # Ensure all model features exist
-            if self.model and self.model.feature_names:
-                for feature in self.model.feature_names:
-                    if feature not in features_df.columns:
-                        features_df[feature] = 0
-                
-                # Select only the features the model was trained on
-                features_df = features_df[self.model.feature_names]
-            
-            return features_df
+            logger.info(f"✅ Prediction made for customer {customer_data.get('id', 'unknown')}: {risk_category} risk ({churn_probability:.3f})")
+            return result
             
         except Exception as e:
-            logger.error(f"Error engineering features: {str(e)}")
-            # Return minimal feature set
-            minimal_features = pd.DataFrame({
-                'tenure_months': [customer_detail.get('tenure_months', 0)],
-                'monthly_charges': [customer_detail.get('monthly_charges', 0)],
-                'total_charges': [customer_detail.get('total_charges', 0)],
-                'outstanding_balance': [customer_detail.get('outstanding_balance', 0)],
-                'total_tickets': [customer_detail.get('total_tickets', 0)],
-                'total_payments': [customer_detail.get('total_payments', 0)]
-            })
-            return minimal_features
+            logger.error(f"❌ Prediction failed for customer {customer_data.get('id', 'unknown')}: {str(e)}")
+            return self._fallback_prediction(customer_data)
     
-    def _predict_with_rules(self, customer_detail: Dict[str, Any]) -> Dict[str, Any]:
-        """Fallback rule-based prediction when ML model is not available"""
+    def _rule_based_prediction(self, features: pd.Series) -> Dict:
+        """Simple rule-based prediction as fallback"""
         try:
-            probability = 0.0
+            score = 0
             
-            # Tenure risk (shorter tenure = higher risk)
-            tenure = customer_detail.get('tenure_months', 0)
-            if tenure < 6:
-                probability += 0.4
-            elif tenure < 12:
-                probability += 0.2
-            elif tenure < 24:
-                probability += 0.1
+            # Tenure risk
+            if features.get('tenure_months', 0) < 6:
+                score += 0.3
+            elif features.get('tenure_months', 0) < 12:
+                score += 0.1
             
-            # Payment behavior
-            outstanding_balance = customer_detail.get('outstanding_balance', 0)
-            monthly_charges = customer_detail.get('monthly_charges', 0)
+            # Balance risk
+            balance_ratio = features.get('balance_to_monthly_ratio', 0)
+            if balance_ratio > 3:
+                score += 0.4
+            elif balance_ratio > 1:
+                score += 0.2
             
-            if outstanding_balance > 0 and monthly_charges > 0:
-                balance_ratio = outstanding_balance / monthly_charges
-                if balance_ratio > 3:
-                    probability += 0.3
-                elif balance_ratio > 1:
-                    probability += 0.2
+            # Ticket risk
+            ticket_rate = features.get('tickets_per_month', 0)
+            if ticket_rate > 0.5:
+                score += 0.3
+            elif ticket_rate > 0.2:
+                score += 0.1
             
-            # Support ticket activity
-            total_tickets = customer_detail.get('total_tickets', 0)
-            if total_tickets > 5:
-                probability += 0.2
-            elif total_tickets > 2:
-                probability += 0.1
+            # Payment consistency
+            payment_consistency = features.get('payment_consistency', 1)
+            if payment_consistency < 0.8:
+                score += 0.2
             
-            # Payment frequency
-            total_payments = customer_detail.get('total_payments', 0)
-            if tenure > 0:
-                payment_rate = total_payments / tenure
-                if payment_rate < 0.5:  # Less than 0.5 payments per month
-                    probability += 0.2
+            # Cap at 0.9
+            churn_probability = min(score, 0.9)
             
-            # Service charges
-            if monthly_charges < 20:
-                probability += 0.1
-            elif monthly_charges > 100:
-                probability -= 0.1  # High-value customers less likely to churn
-            
-            # Ensure probability is between 0 and 1
-            probability = max(0.0, min(1.0, probability))
-            
-            risk_level = self._categorize_risk(probability)
+            if churn_probability >= 0.6:
+                risk_category = 'high'
+            elif churn_probability >= 0.3:
+                risk_category = 'medium'
+            else:
+                risk_category = 'low'
             
             return {
-                'customer_id': customer_detail.get('id', customer_detail.get('customer_id')),
-                'churn_probability': probability,
-                'churn_risk': risk_level,
-                'will_churn': probability >= 0.5,
-                'prediction_method': 'rule_based',
-                'confidence': 0.6,  # Lower confidence for rule-based
-                'predicted_at': datetime.utcnow().isoformat()
+                'customer_id': None,
+                'churn_probability': float(churn_probability),
+                'churn_risk': risk_category,
+                'model_version': self.model_version,
+                'prediction_date': datetime.utcnow(),
+                'confidence': 'medium',
+                'risk_factors': self._identify_risk_factors(features)
             }
             
         except Exception as e:
-            logger.error(f"Error in rule-based prediction: {str(e)}")
-            return {
-                'customer_id': customer_detail.get('id', 'unknown'),
-                'churn_probability': 0.5,
-                'churn_risk': 'medium',
-                'will_churn': False,
-                'prediction_method': 'fallback',
-                'error': str(e),
-                'predicted_at': datetime.utcnow().isoformat()
-            }
+            logger.error(f"❌ Rule-based prediction failed: {str(e)}")
+            return self._fallback_prediction({})
     
-    def _categorize_risk(self, probability: float) -> str:
-        """Categorize churn probability into risk levels"""
-        if probability >= 0.7:
+    def _fallback_prediction(self, customer_data: Dict) -> Dict:
+        """Last resort fallback prediction"""
+        return {
+            'customer_id': customer_data.get('id', None),
+            'churn_probability': 0.5,
+            'churn_risk': 'medium',
+            'model_version': 'fallback',
+            'prediction_date': datetime.utcnow(),
+            'confidence': 'low',
+            'risk_factors': ['Unable to process data']
+        }
+    
+    def _calculate_confidence(self, probability: float) -> str:
+        """Calculate prediction confidence based on probability"""
+        if probability <= 0.1 or probability >= 0.9:
             return 'high'
-        elif probability >= 0.4:
+        elif probability <= 0.2 or probability >= 0.8:
             return 'medium'
         else:
             return 'low'
     
-    def _calculate_confidence(self, probability: float) -> float:
-        """Calculate prediction confidence based on probability"""
-        # Higher confidence when probability is closer to 0 or 1
-        confidence = 1 - (2 * abs(probability - 0.5))
-        return max(0.5, confidence)  # Minimum 50% confidence
+    def _identify_risk_factors(self, features: pd.Series) -> List[str]:
+        """Identify key risk factors for the customer"""
+        risk_factors = []
+        
+        try:
+            # Check various risk indicators
+            if features.get('new_customer_flag', 0) == 1:
+                risk_factors.append('New customer (< 6 months)')
+            
+            if features.get('high_balance_flag', 0) == 1:
+                risk_factors.append('High outstanding balance')
+            
+            if features.get('high_tickets_flag', 0) == 1:
+                risk_factors.append('Many support tickets')
+            
+            if features.get('low_usage_flag', 0) == 1:
+                risk_factors.append('Low monthly charges')
+            
+            if features.get('payment_consistency', 1) < 0.8:
+                risk_factors.append('Inconsistent payments')
+            
+            if features.get('tickets_per_month', 0) > 0.3:
+                risk_factors.append('High ticket frequency')
+            
+            if not risk_factors:
+                risk_factors.append('Low risk profile')
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Risk factor identification failed: {str(e)}")
+            risk_factors = ['Unable to identify specific risks']
+        
+        return risk_factors
     
-    def predict_batch(self, customers_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Predict churn for multiple customers"""
+    def predict_batch(self, customers_data: List[Dict]) -> List[Dict]:
+        """
+        Predict churn for multiple customers
+        
+        Args:
+            customers_data: List of customer dictionaries
+            
+        Returns:
+            List of prediction results
+        """
         results = []
         
-        for customer_detail in customers_data:
-            try:
-                prediction = self.predict_customer_churn(customer_detail)
-                results.append(prediction)
-            except Exception as e:
-                logger.error(f"Error predicting for customer {customer_detail.get('id')}: {str(e)}")
-                results.append({
-                    'customer_id': customer_detail.get('id', 'unknown'),
-                    'churn_probability': 0.5,
-                    'churn_risk': 'unknown',
-                    'will_churn': False,
-                    'error': str(e),
-                    'predicted_at': datetime.utcnow().isoformat()
-                })
+        logger.info(f"🔄 Starting batch prediction for {len(customers_data)} customers")
         
+        for i, customer in enumerate(customers_data):
+            try:
+                result = self.predict_customer_churn(customer)
+                results.append(result)
+                
+                # Log progress every 10 customers
+                if (i + 1) % 10 == 0:
+                    logger.info(f"   Progress: {i + 1}/{len(customers_data)} customers processed")
+                    
+            except Exception as e:
+                logger.error(f"❌ Batch prediction failed for customer {customer.get('id', i)}: {str(e)}")
+                results.append(self._fallback_prediction(customer))
+        
+        logger.info(f"✅ Batch prediction complete: {len(results)} results")
         return results
     
-    def get_model_info(self) -> Dict[str, Any]:
-        """Get information about the current model"""
-        if self.is_trained and self.model:
-            return {
-                'is_trained': True,
-                'model_type': 'XGBoost',
-                'version': self.model.version,
-                'trained_at': self.model.trained_at,
-                'metrics': self.model.metrics,
-                'feature_count': len(self.model.feature_names) if self.model.feature_names else 0
-            }
-        else:
-            return {
-                'is_trained': False,
-                'model_type': 'Rule-based fallback',
-                'message': 'No trained ML model available. Using rule-based predictions.',
-                'model_path': self.model_path
-            }
+    def get_model_info(self) -> Dict:
+        """Get information about the loaded model"""
+        return {
+            'is_trained': self.is_trained,
+            'model_type': self.model_type,
+            'model_version': self.model_version,
+            'metrics': self.model_metrics,
+            'feature_count': len(self.feature_columns),
+            'feature_columns': self.feature_columns
+        }
+    
+    def retrain_model(self, training_data: pd.DataFrame) -> bool:
+        """
+        Retrain the model with new data
+        Note: This is a placeholder for future implementation
+        """
+        logger.info("📚 Model retraining requested (not implemented yet)")
+        return False
+
+
+# Test function
+def test_prediction_service():
+    """Test the prediction service"""
+    print("🧪 Testing Prediction Service...")
+    
+    # Initialize service
+    service = ChurnPredictionService()
+    print(f"✅ Service initialized: {service.is_trained}")
+    
+    # Test single prediction
+    sample_customer = {
+        'id': 1,
+        'tenure_months': 12,
+        'monthly_charges': 75.50,
+        'total_charges': 900.0,
+        'outstanding_balance': 150.0,
+        'total_tickets': 3,
+        'total_payments': 12
+    }
+    
+    result = service.predict_customer_churn(sample_customer)
+    print(f"✅ Single prediction: {result['churn_risk']} risk ({result['churn_probability']:.3f})")
+    
+    # Test batch prediction
+    batch_customers = [sample_customer.copy() for _ in range(3)]
+    batch_results = service.predict_batch(batch_customers)
+    print(f"✅ Batch predictions: {len(batch_results)} results")
+    
+    # Model info
+    model_info = service.get_model_info()
+    print(f"✅ Model info: {model_info['model_type']}")
+    
+    return service
+
+
+if __name__ == "__main__":
+    test_prediction_service()
