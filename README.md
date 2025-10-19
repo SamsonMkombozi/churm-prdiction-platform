@@ -1,1 +1,0 @@
-# churm-prdiction-platform
