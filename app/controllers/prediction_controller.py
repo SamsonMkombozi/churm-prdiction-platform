@@ -88,6 +88,8 @@ def dashboard():
         logger.error(traceback.format_exc())
         flash('An error occurred while loading the prediction dashboard.', 'error')
         return redirect(url_for('dashboard.index'))
+    
+
 
 @prediction_bp.route('/run-predictions', methods=['POST'])
 @login_required
