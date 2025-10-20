@@ -74,6 +74,8 @@ def index():
                 logger.warning(f"Could not load company data: {e}")
         
         logger.info(f"Dashboard stats: {stats}")
+        logger.info(f"Debug stats: {stats}")
+        print(f"🔍 STATS DEBUG: {stats}") 
         
         return render_template('dashboard/index.html', 
                              company=company, 
