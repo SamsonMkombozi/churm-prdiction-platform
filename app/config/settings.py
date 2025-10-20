@@ -51,6 +51,9 @@ class DevelopmentConfig(Config):
     DEBUG = True
     TESTING = False
     
+    WTF_CSRF_ENABLED = False
+
+    
     # Development database (SQLite)
     SQLALCHEMY_DATABASE_URI = os.getenv(
         'DATABASE_URL',
