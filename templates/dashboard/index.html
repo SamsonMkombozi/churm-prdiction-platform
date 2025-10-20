@@ -318,6 +318,30 @@
                     </div>
                 </div>
 
+                <!-- ML Prediction Section -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card action-card border-primary">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="mb-0"><i class="fas fa-brain me-2"></i>Churn Prediction Engine</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col-md-8">
+                                        <p class="mb-2"><strong>Predict customer churn risk for all customers</strong></p>
+                                        <p class="text-muted mb-0">Run ML analysis to identify high-risk customers based on their behavior patterns</p>
+                                    </div>
+                                    <div class="col-md-4 text-end">
+                                        <button type="button" class="btn btn-warning btn-lg" id="runPredictionsBtn">
+                                            <i class="fas fa-brain me-2"></i>Run Predictions
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 
 
                 <!-- Recent Activity -->
@@ -568,32 +592,28 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <script>
-        // Churn Risk Distribution Chart
-        const ctx1 = document.getElementById('churnRiskChart').getContext('2d');
-        new Chart(ctx1, {
-            type: 'doughnut',
-            data: {
-                labels: ['Low Risk', 'Medium Risk', 'High Risk'],
-                datasets: [{
-                    data: [
-                        {{ stats.total_customers|default(100) - stats.at_risk_customers|default(15) - stats.high_risk_customers|default(8) }},
-                        {{ stats.at_risk_customers|default(15) - stats.high_risk_customers|default(8) }},
-                        {{ stats.high_risk_customers|default(8) }}
-                    ],
-                    backgroundColor: ['#1cc88a', '#f6c23e', '#e74a3b'],
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom'
-                    }
-                }
-            }
-        });
+        // Fixed Chart.js with proper data handling
+const ctx1 = document.getElementById('churnRiskChart').getContext('2d');
+new Chart(ctx1, {
+    type: 'doughnut',
+    data: {
+        labels: ['Low Risk', 'Medium Risk', 'High Risk'],
+        datasets: [{
+            data: [
+                {{ (stats.total_customers|default(0) - stats.at_risk_customers|default(0))|abs }},
+                {{ (stats.at_risk_customers|default(0) - stats.high_risk_customers|default(0))|abs }},
+                {{ stats.high_risk_customers|default(0) }}
+            ],
+            backgroundColor: ['#1cc88a', '#f6c23e', '#e74a3b'],
+            borderWidth: 0
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom' } }
+    }
+});
 
         // Accuracy Gauge
         const ctx2 = document.getElementById('accuracyGauge').getContext('2d');
@@ -681,6 +701,35 @@
         setInterval(function() {
             location.reload();
         }, 300000);
+
+
+        // ML Prediction Handler
+document.getElementById('runPredictionsBtn').addEventListener('click', function() {
+    const btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Running Predictions...';
+    
+    fetch('{{ url_for("prediction.run_predictions") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            alert(`✅ ${data.message}\n${data.predictions_processed} predictions processed`);
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            alert(`❌ Error: ${data.message}`);
+        }
+    })
+    .catch(error => {
+        alert('❌ Network error: ' + error.message);
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-brain me-2"></i>Run Predictions';
+    });
+});
     </script>
 
 

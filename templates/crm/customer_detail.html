@@ -138,23 +138,38 @@
                 </div>
             </div>
 
-            {% if customer.churn_risk %}
-            <div class="card shadow border-left-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }}">
-                <div class="card-body text-center">
-                    <i class="fas fa-exclamation-triangle fa-2x text-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }} mb-2"></i>
-                    <h3 class="mb-0">{{ customer.churn_risk|upper }}</h3>
-                    <p class="text-muted mb-0">Churn Risk</p>
-                    {% if customer.churn_probability %}
-                    <div class="progress mt-2" style="height: 20px;">
-                        <div class="progress-bar bg-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }}" 
-                             role="progressbar" style="width: {{ customer.churn_probability * 100 }}%">
-                            {{ (customer.churn_probability * 100)|round(1) }}%
-                        </div>
+        <!-- Enhanced Churn Risk Card -->
+        {% if customer.churn_risk %}
+        <div class="card shadow border-left-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }}">
+            <div class="card-body text-center">
+                <i class="fas fa-exclamation-triangle fa-2x text-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }} mb-2"></i>
+                <h3 class="mb-0">{{ customer.churn_risk|upper }}</h3>
+                <p class="text-muted mb-0">Churn Risk</p>
+                {% if customer.churn_probability %}
+                <div class="progress mt-2" style="height: 20px;">
+                    <div class="progress-bar bg-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }}" 
+                        role="progressbar" style="width: {{ customer.churn_probability * 100 }}%">
+                        {{ (customer.churn_probability * 100)|round(1) }}%
                     </div>
-                    {% endif %}
                 </div>
+                <small class="text-muted mt-1 d-block">
+                    Predicted: {{ customer.last_prediction_date|datetime if customer.last_prediction_date else 'Not available' }}
+                </small>
+                {% endif %}
             </div>
-            {% endif %}
+        </div>
+        {% else %}
+        <div class="card shadow border-left-secondary">
+            <div class="card-body text-center">
+                <i class="fas fa-question-circle fa-2x text-secondary mb-2"></i>
+                <h5 class="mb-0">No Prediction</h5>
+                <p class="text-muted mb-0">Run predictions to see churn risk</p>
+                <button class="btn btn-sm btn-primary mt-2" onclick="runSinglePrediction({{ customer.id }})">
+                    <i class="fas fa-brain me-1"></i>Predict
+                </button>
+            </div>
+        </div>
+        {% endif %}
         </div>
     </div>
 

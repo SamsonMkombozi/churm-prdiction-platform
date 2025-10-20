@@ -157,9 +157,14 @@
                             </td>
                             <td>
                                 {% if customer.churn_risk %}
-                                <span class="badge bg-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }}">
-                                    {{ customer.churn_risk|upper }}
-                                </span>
+                                <div class="d-flex align-items-center">
+                                    <span class="badge bg-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }} me-2">
+                                        {{ customer.churn_risk|upper }}
+                                    </span>
+                                    {% if customer.churn_probability %}
+                                    <small class="text-muted">{{ (customer.churn_probability * 100)|round(1) }}%</small>
+                                    {% endif %}
+                                </div>
                                 {% else %}
                                 <span class="text-muted">-</span>
                                 {% endif %}
