@@ -703,33 +703,37 @@ new Chart(ctx1, {
         }, 300000);
 
 
-        // ML Prediction Handler
-document.getElementById('runPredictionsBtn').addEventListener('click', function() {
-    const btn = this;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Running Predictions...';
-    
-    fetch('{{ url_for("prediction.run_predictions") }}', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            alert(`✅ ${data.message}\n${data.predictions_processed} predictions processed`);
-            setTimeout(() => window.location.reload(), 1000);
-        } else {
-            alert(`❌ Error: ${data.message}`);
-        }
-    })
-    .catch(error => {
-        alert('❌ Network error: ' + error.message);
-    })
-    .finally(() => {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-brain me-2"></i>Run Predictions';
+    // Fixed ML Prediction Handler
+    document.getElementById('runPredictionsBtn').addEventListener('click', function() {
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Running Predictions...';
+        
+        fetch('{{ url_for("dashboard.run_predictions") }}', {  // ✅ FIXED URL
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'  // Add CSRF if you have it
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert(`✅ Success!\n${data.message}\n\nResults:\n• High Risk: ${data.results.high_risk}\n• Medium Risk: ${data.results.medium_risk}\n• Low Risk: ${data.results.low_risk}`);
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                alert(`❌ Error: ${data.message}`);
+            }
+        })
+        .catch(error => {
+            console.error('Prediction error:', error);
+            alert('❌ Network error: ' + error.message);
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-brain me-2"></i>Run Predictions';
+        });
     });
-});
     </script>
 
 
