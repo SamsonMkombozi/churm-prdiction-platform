@@ -1,12 +1,11 @@
 """
-Authentication Service - Fixed DB Import
+Fixed Authentication Service
 app/services/auth_service.py
 
-Handles user authentication operations
+✅ FIXED: Import db from extensions, not from app
 """
 
-# ✅ FIXED: Import db from extensions, not from app
-from app.extensions import db
+from app.extensions import db  # ✅ FIXED: Import from extensions
 from app.models.user import User
 from app.models.company import Company
 from flask_login import login_user, logout_user
@@ -47,10 +46,18 @@ class AuthService:
                     return False, "Company name already exists", None
                 
                 # Create company
-                from slugify import slugify
+                try:
+                    from slugify import slugify
+                    slug = slugify(company_name)
+                except ImportError:
+                    # If slugify not available, create simple slug
+                    import re
+                    slug = re.sub(r'[^\w\s-]', '', company_name.lower())
+                    slug = re.sub(r'[-\s]+', '-', slug).strip('-')
+                
                 company = Company(
                     name=company_name,
-                    slug=slugify(company_name),
+                    slug=slug,
                     is_active=True
                 )
                 db.session.add(company)
@@ -96,7 +103,7 @@ class AuthService:
         if not user.is_active:
             return False, "Account is disabled. Please contact your administrator.", None
         
-        # Check if user's company is active
+        # Check if user's company is active (if they have one)
         if user.company and not user.company.is_active:
             return False, "Your company account is inactive. Please contact support.", None
         

@@ -1,4 +1,6 @@
-# run.py - Simple Application Entry Point
+"""
+Development server entry point
+"""
 import os
 import logging
 
@@ -23,8 +25,8 @@ if __name__ == '__main__':
     
     # Run the application
     print("🚀 Starting Churn Prediction Platform...")
-    print("📧 Try login: admin@example.com")
-    print("🔑 Try password: admin123")
+    print("📧 Demo login: admin@example.com")
+    print("🔑 Demo password: admin123")
     print("🌐 URL: http://localhost:5001")
     
     app.run(host='0.0.0.0', port=5001, debug=True)
