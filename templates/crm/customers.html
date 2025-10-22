@@ -149,10 +149,10 @@
                             </td>
                             <td>{{ customer.service_type or 'N/A' }}</td>
                             <td>{{ customer.tenure_months }} months</td>
-                            <td>KSK {{ "{:,.0f}".format(customer.monthly_charges) }}</td>
+                            <td>KSH {{ "{:,.0f}".format(customer.monthly_charges) }}</td>
                             <td>
                                 <span class="text-{{ 'danger' if customer.outstanding_balance > 0 else 'success' }}">
-                                    KSK {{ "{:,.0f}".format(customer.outstanding_balance) }}
+                                    KSH {{ "{:,.0f}".format(customer.outstanding_balance) }}
                                 </span>
                             </td>
                             <td>
