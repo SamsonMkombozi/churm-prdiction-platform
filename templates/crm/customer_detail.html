@@ -87,16 +87,16 @@
                     <div class="row">
                         <div class="col-md-4 text-center mb-3">
                             <div class="text-muted small">Monthly Charges</div>
-                            <div class="h4 mb-0">TSh {{ "{:,.0f}".format(customer.monthly_charges) }}</div>
+                            <div class="h4 mb-0">KSH {{ "{:,.0f}".format(customer.monthly_charges) }}</div>
                         </div>
                         <div class="col-md-4 text-center mb-3">
                             <div class="text-muted small">Total Charges</div>
-                            <div class="h4 mb-0">TSh {{ "{:,.0f}".format(customer.total_charges) }}</div>
+                            <div class="h4 mb-0">KSH {{ "{:,.0f}".format(customer.total_charges) }}</div>
                         </div>
                         <div class="col-md-4 text-center mb-3">
                             <div class="text-muted small">Outstanding Balance</div>
                             <div class="h4 mb-0 text-{{ 'danger' if customer.outstanding_balance > 0 else 'success' }}">
-                                TSh {{ "{:,.0f}".format(customer.outstanding_balance) }}
+                                KSH {{ "{:,.0f}".format(customer.outstanding_balance) }}
                             </div>
                         </div>
                     </div>
@@ -285,7 +285,7 @@
                                 {% for payment in payments %}
                                 <tr>
                                     <td><code class="small">{{ payment.transaction_id or payment.id }}</code></td>
-                                    <td><strong>TSh {{ "{:,.0f}".format(payment.amount) }}</strong></td>
+                                    <td><strong>KSH {{ "{:,.0f}".format(payment.amount) }}</strong></td>
                                     <td>
                                         <span class="badge bg-secondary">
                                             {{ payment.payment_method|upper|replace('_', ' ') if payment.payment_method else 'N/A' }}

@@ -34,7 +34,7 @@
                         Total Revenue
                     </div>
                     <div class="h5 mb-0 font-weight-bold">
-                        TSh {{ "{:,.0f}".format(payments|sum(attribute='amount')) }}
+                        KSH {{ "{:,.0f}".format(payments|sum(attribute='amount')) }}
                     </div>
                 </div>
             </div>
@@ -147,7 +147,7 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <strong class="text-success">TSh {{ "{:,.0f}".format(payment.amount) }}</strong>
+                                <strong class="text-success">KSH {{ "{:,.0f}".format(payment.amount) }}</strong>
                             </td>
                             <td>
                                 <span class="badge bg-secondary">
@@ -188,7 +188,7 @@
                                             <dd class="col-sm-7">{{ payment.customer.customer_name if payment.customer else 'N/A' }}</dd>
                                             
                                             <dt class="col-sm-5">Amount:</dt>
-                                            <dd class="col-sm-7"><strong>TSh {{ "{:,.0f}".format(payment.amount) }}</strong></dd>
+                                            <dd class="col-sm-7"><strong>KSH {{ "{:,.0f}".format(payment.amount) }}</strong></dd>
                                             
                                             <dt class="col-sm-5">Payment Method:</dt>
                                             <dd class="col-sm-7">{{ payment.payment_method|upper|replace('_', ' ') if payment.payment_method else 'N/A' }}</dd>

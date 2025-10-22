@@ -111,7 +111,7 @@
                                 Total Revenue
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                TSh {{ "{:,.0f}".format(stats.total_revenue) }}
+                                KSH {{ "{:,.0f}".format(stats.total_revenue) }}
                             </div>
                             <small class="text-muted">{{ stats.payments|number }} payments</small>
                         </div>
@@ -219,7 +219,7 @@
                                         </span>
                                     </td>
                                     <td>{{ customer.tenure_months }} months</td>
-                                    <td>TSh {{ "{:,.0f}".format(customer.monthly_charges) }}</td>
+                                    <td>KSH {{ "{:,.0f}".format(customer.monthly_charges) }}</td>
                                     <td>{{ customer.created_at|datetime }}</td>
                                 </tr>
                                 {% endfor %}
