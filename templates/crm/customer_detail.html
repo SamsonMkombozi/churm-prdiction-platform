@@ -9,6 +9,10 @@
             <i class="fas fa-user me-2"></i>{{ customer.customer_name }}
         </h1>
         <div class="btn-toolbar">
+            <!-- ✅ FIXED: Add predict button for single customer -->
+            <button type="button" class="btn btn-warning me-2" onclick="runSinglePrediction({{ customer.id }})">
+                <i class="fas fa-brain me-2"></i>Update Prediction
+            </button>
             <a href="{{ url_for('crm.customers') }}" class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left me-2"></i>Back to Customers
             </a>
@@ -138,38 +142,68 @@
                 </div>
             </div>
 
-        <!-- Enhanced Churn Risk Card -->
-        {% if customer.churn_risk %}
-        <div class="card shadow border-left-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }}">
-            <div class="card-body text-center">
-                <i class="fas fa-exclamation-triangle fa-2x text-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }} mb-2"></i>
-                <h3 class="mb-0">{{ customer.churn_risk|upper }}</h3>
-                <p class="text-muted mb-0">Churn Risk</p>
-                {% if customer.churn_probability %}
-                <div class="progress mt-2" style="height: 20px;">
-                    <div class="progress-bar bg-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }}" 
-                        role="progressbar" style="width: {{ customer.churn_probability * 100 }}%">
-                        {{ (customer.churn_probability * 100)|round(1) }}%
+            <!-- ✅ FIXED: Enhanced Churn Risk Card with Better Logic -->
+            {% if customer.churn_risk and customer.churn_probability %}
+            <div class="card shadow border-left-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }}">
+                <div class="card-body text-center">
+                    <i class="fas fa-exclamation-triangle fa-2x text-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }} mb-2"></i>
+                    <h3 class="mb-0">{{ customer.churn_risk|upper }}</h3>
+                    <p class="text-muted mb-2">Churn Risk</p>
+                    
+                    <!-- Progress bar showing probability -->
+                    <div class="progress mb-2" style="height: 20px;">
+                        <div class="progress-bar bg-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }}" 
+                            role="progressbar" style="width: {{ (customer.churn_probability * 100)|round(1) }}%">
+                            {{ (customer.churn_probability * 100)|round(1) }}%
+                        </div>
                     </div>
+                    
+                    <small class="text-muted mt-1 d-block">
+                        Predicted: {{ customer.last_prediction_date|datetime if customer.last_prediction_date else 'Not available' }}
+                    </small>
+                    
+                    <!-- ✅ FIXED: Risk-specific action recommendations -->
+                    {% if customer.churn_risk == 'high' %}
+                    <div class="alert alert-danger mt-3 small">
+                        <strong>Action Required:</strong>
+                        <ul class="mb-0 text-left small">
+                            <li>Contact immediately</li>
+                            <li>Review outstanding issues</li>
+                            <li>Offer retention incentives</li>
+                        </ul>
+                    </div>
+                    {% elif customer.churn_risk == 'medium' %}
+                    <div class="alert alert-warning mt-3 small">
+                        <strong>Monitor Closely:</strong>
+                        <ul class="mb-0 text-left small">
+                            <li>Increase engagement</li>
+                            <li>Check service quality</li>
+                            <li>Proactive support</li>
+                        </ul>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-success mt-3 small">
+                        <strong>Low Risk:</strong> Customer appears stable. Continue regular service.
+                    </div>
+                    {% endif %}
                 </div>
-                <small class="text-muted mt-1 d-block">
-                    Predicted: {{ customer.last_prediction_date|datetime if customer.last_prediction_date else 'Not available' }}
-                </small>
-                {% endif %}
             </div>
-        </div>
-        {% else %}
-        <div class="card shadow border-left-secondary">
-            <div class="card-body text-center">
-                <i class="fas fa-question-circle fa-2x text-secondary mb-2"></i>
-                <h5 class="mb-0">No Prediction</h5>
-                <p class="text-muted mb-0">Run predictions to see churn risk</p>
-                <button class="btn btn-sm btn-primary mt-2" onclick="runSinglePrediction({{ customer.id }})">
-                    <i class="fas fa-brain me-1"></i>Predict
-                </button>
+            {% else %}
+            <!-- ✅ FIXED: Show when no prediction is available -->
+            <div class="card shadow border-left-secondary">
+                <div class="card-body text-center">
+                    <i class="fas fa-question-circle fa-2x text-secondary mb-2"></i>
+                    <h5 class="mb-0">No Prediction</h5>
+                    <p class="text-muted mb-2">Churn risk not calculated</p>
+                    <button class="btn btn-sm btn-primary" onclick="runSinglePrediction({{ customer.id }})">
+                        <i class="fas fa-brain me-1"></i>Generate Prediction
+                    </button>
+                    <small class="text-muted d-block mt-2">
+                        Click to run ML analysis for this customer
+                    </small>
+                </div>
             </div>
-        </div>
-        {% endif %}
+            {% endif %}
         </div>
     </div>
 
@@ -278,4 +312,49 @@
         </div>
     </div>
 </div>
+
+<!-- ✅ FIXED: Add JavaScript for single customer prediction -->
+<script>
+function runSinglePrediction(customerId) {
+    // Show loading state
+    const button = event.target.closest('button');
+    const originalHtml = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Predicting...';
+    
+    // Make AJAX request to predict single customer
+    fetch('/prediction/predict', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            customer_id: customerId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            // Show success message
+            alert(`✅ Prediction updated!\nRisk Level: ${data.result.churn_risk.toUpperCase()}\nProbability: ${Math.round(data.result.churn_probability * 100)}%`);
+            
+            // Reload page to show updated prediction
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            alert(`❌ Error: ${data.message}`);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('❌ Network error occurred');
+    })
+    .finally(() => {
+        // Restore button
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+    });
+}
+</script>
 {% endblock %}
