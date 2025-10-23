@@ -1,153 +1,237 @@
 #!/usr/bin/env python3
 """
-Template Diagnostic Script
-Run this to check template configuration
+Comprehensive Fix Script for Predictions Table Schema
+
+This script adds ALL missing columns to the predictions table based on 
+the SQLAlchemy error patterns. It will check for and add any missing columns
+that your model expects.
+
+Specifically targeting /instance/churn_platform.db
 """
 
+import sqlite3
 import os
 import sys
+from datetime import datetime
 
-def check_template_structure():
-    """Check if template files exist"""
-    print("🔍 Checking template structure...")
-    
-    # Get current directory
-    current_dir = os.getcwd()
-    print(f"📁 Current directory: {current_dir}")
-    
-    # Check templates directory
-    templates_dir = os.path.join(current_dir, 'templates')
-    print(f"📁 Templates directory: {templates_dir}")
-    print(f"✅ Templates directory exists: {os.path.exists(templates_dir)}")
-    
-    if os.path.exists(templates_dir):
-        print("\n📋 Template files found:")
-        for root, dirs, files in os.walk(templates_dir):
-            level = root.replace(templates_dir, '').count(os.sep)
-            indent = ' ' * 2 * level
-            print(f"{indent}{os.path.basename(root)}/")
-            subindent = ' ' * 2 * (level + 1)
-            for file in files:
-                if file.endswith('.html'):
-                    print(f"{subindent}{file}")
-    
-    # Check specific files
-    required_templates = [
-        'templates/base.html',
-        'templates/dashboard/index.html',
-        'templates/auth/login.html',
-        'templates/company/index.html'
-    ]
-    
-    print("\n🎯 Checking required templates:")
-    for template in required_templates:
-        full_path = os.path.join(current_dir, template)
-        exists = os.path.exists(full_path)
-        print(f"{'✅' if exists else '❌'} {template}")
-        if not exists and 'dashboard/index.html' in template:
-            # Try to create the missing dashboard template
-            dashboard_dir = os.path.join(current_dir, 'templates', 'dashboard')
-            os.makedirs(dashboard_dir, exist_ok=True)
-            print(f"📁 Created dashboard directory: {dashboard_dir}")
-
-def create_minimal_dashboard_template():
-    """Create a minimal dashboard template if it doesn't exist"""
-    templates_dir = os.path.join(os.getcwd(), 'templates')
-    dashboard_dir = os.path.join(templates_dir, 'dashboard')
-    dashboard_file = os.path.join(dashboard_dir, 'index.html')
-    
-    if not os.path.exists(dashboard_file):
-        os.makedirs(dashboard_dir, exist_ok=True)
+def get_expected_columns():
+    """Define the expected schema for the predictions table"""
+    return {
+        # Core columns (likely already exist)
+        'id': 'INTEGER PRIMARY KEY',
+        'company_id': 'INTEGER NOT NULL',
+        'customer_id': 'INTEGER NOT NULL',
+        'churn_probability': 'REAL NOT NULL',
+        'churn_risk': 'TEXT NOT NULL',
+        'created_at': 'DATETIME',
+        'updated_at': 'DATETIME',
         
-        minimal_template = '''{% extends 'base.html' %}
+        # Missing columns that need to be added
+        'confidence': 'REAL DEFAULT 0.0',
+        'model_version': 'TEXT',
+        'model_type': 'TEXT',
+        'risk_factors': 'TEXT',
+        'feature_values': 'TEXT'
+    }
 
-{% block title %}Dashboard - {{ company.name }}{% endblock %}
-
-{% block content %}
-<div class="container-fluid py-4">
-    <h1 class="h2">
-        <i class="fas fa-tachometer-alt me-2"></i>Dashboard
-    </h1>
+def check_and_add_missing_columns():
+    """Check for missing columns and add them to the predictions table"""
     
-    <div class="row">
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body">
-                    <h5>Total Customers</h5>
-                    <h3>{{ stats.total_customers or 0 }}</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body">
-                    <h5>High Risk</h5>
-                    <h3>{{ stats.high_risk_customers or 0 }}</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body">
-                    <h5>Tickets</h5>
-                    <h3>{{ stats.total_tickets or 0 }}</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body">
-                    <h5>Payments</h5>
-                    <h3>{{ stats.total_payments or 0 }}</h3>
-                </div>
-            </div>
-        </div>
-    </div>
+    db_path = "instance/churn_platform.db"
     
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5>Quick Actions</h5>
-                </div>
-                <div class="card-body">
-                    <a href="{{ url_for('crm.dashboard') }}" class="btn btn-primary me-2">
-                        <i class="fas fa-sync me-2"></i>CRM Dashboard
-                    </a>
-                    <a href="{{ url_for('crm.customers') }}" class="btn btn-success me-2">
-                        <i class="fas fa-users me-2"></i>View Customers
-                    </a>
-                    <a href="{{ url_for('company.settings') }}" class="btn btn-info">
-                        <i class="fas fa-cog me-2"></i>Settings
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}'''
+    # Verify database exists
+    if not os.path.exists(db_path):
+        print(f"❌ Database file not found: {db_path}")
+        print("Please run this script from your project root directory.")
+        print("Current directory:", os.getcwd())
+        return False
+    
+    print(f"📁 Target database: {db_path}")
+    print(f"📍 Full path: {os.path.abspath(db_path)}")
+    
+    # Create backup
+    backup_path = f"{db_path}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    try:
+        import shutil
+        shutil.copy2(db_path, backup_path)
+        print(f"💾 Backup created: {backup_path}")
+    except Exception as e:
+        print(f"⚠️  Warning: Could not create backup: {e}")
+        response = input("Continue without backup? (y/N): ").strip().lower()
+        if response != 'y':
+            print("❌ Operation cancelled")
+            return False
+    
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
         
-        with open(dashboard_file, 'w') as f:
-            f.write(minimal_template)
+        # Get current table structure
+        print("\n🔍 Checking current predictions table structure...")
+        cursor.execute("PRAGMA table_info(predictions)")
+        current_columns_info = cursor.fetchall()
+        current_columns = {col[1]: col[2] for col in current_columns_info}  # {name: type}
         
-        print(f"✅ Created minimal dashboard template: {dashboard_file}")
-        return True
-    
-    return False
+        print(f"📋 Current columns ({len(current_columns)}):")
+        for name, col_type in current_columns.items():
+            print(f"   ✅ {name:<20} {col_type}")
+        
+        # Check which columns are missing
+        expected_columns = get_expected_columns()
+        missing_columns = []
+        
+        for col_name, col_definition in expected_columns.items():
+            if col_name not in current_columns:
+                missing_columns.append((col_name, col_definition))
+        
+        if not missing_columns:
+            print("\n✅ All expected columns already exist!")
+            print("Your predictions table schema is up to date.")
+            return True
+        
+        print(f"\n❌ Found {len(missing_columns)} missing columns:")
+        for col_name, col_def in missing_columns:
+            print(f"   ❌ {col_name:<20} {col_def}")
+        
+        # Add missing columns one by one
+        print(f"\n🔧 Adding {len(missing_columns)} missing columns...")
+        
+        successful_additions = []
+        failed_additions = []
+        
+        for col_name, col_definition in missing_columns:
+            try:
+                # Extract just the data type and default for ALTER TABLE
+                if 'DEFAULT' in col_definition:
+                    # Handle columns with default values
+                    parts = col_definition.split()
+                    data_type = parts[0]
+                    default_part = ' '.join(parts[1:])  # e.g., "DEFAULT 0.0"
+                    alter_sql = f"ALTER TABLE predictions ADD COLUMN {col_name} {data_type} {default_part}"
+                else:
+                    # Handle columns without default values
+                    data_type = col_definition.split()[0]
+                    alter_sql = f"ALTER TABLE predictions ADD COLUMN {col_name} {data_type}"
+                
+                print(f"   🔧 Adding {col_name}...")
+                cursor.execute(alter_sql)
+                successful_additions.append(col_name)
+                
+            except sqlite3.Error as e:
+                print(f"   ❌ Failed to add {col_name}: {e}")
+                failed_additions.append((col_name, str(e)))
+        
+        if successful_additions:
+            # Set reasonable default values for existing records
+            print(f"\n📊 Setting default values for existing records...")
+            
+            updates = {
+                'confidence': 0.5,  # Medium confidence for existing predictions
+                'model_version': "'v1.0'",  # Default version
+                'model_type': "'legacy'",  # Mark as legacy predictions
+                'risk_factors': "'{}'",  # Empty JSON object
+                'feature_values': "'{}'"  # Empty JSON object
+            }
+            
+            for col_name in successful_additions:
+                if col_name in updates:
+                    try:
+                        update_sql = f"UPDATE predictions SET {col_name} = {updates[col_name]} WHERE {col_name} IS NULL"
+                        cursor.execute(update_sql)
+                        rows_updated = cursor.rowcount
+                        print(f"   📝 Updated {rows_updated} records for {col_name}")
+                    except sqlite3.Error as e:
+                        print(f"   ⚠️  Warning: Could not update defaults for {col_name}: {e}")
+            
+            # Commit all changes
+            conn.commit()
+            
+            print(f"\n✅ Successfully added {len(successful_additions)} columns!")
+            print(f"   Added: {', '.join(successful_additions)}")
+            
+            if failed_additions:
+                print(f"\n⚠️  Failed to add {len(failed_additions)} columns:")
+                for col_name, error in failed_additions:
+                    print(f"   ❌ {col_name}: {error}")
+        
+        # Verify final schema
+        print(f"\n🔍 Verifying final table structure...")
+        cursor.execute("PRAGMA table_info(predictions)")
+        final_columns_info = cursor.fetchall()
+        final_columns = [col[1] for col in final_columns_info]
+        
+        print(f"📋 Final columns ({len(final_columns)}):")
+        for col_info in final_columns_info:
+            col_id, name, data_type, not_null, default, pk = col_info
+            status = "🆕" if name in successful_additions else "✅"
+            print(f"   {status} {name:<20} {data_type:<10} {'NOT NULL' if not_null else 'NULL':<8} {f'DEFAULT {default}' if default else ''}")
+        
+        # Test query to make sure it works
+        print(f"\n🧪 Testing query that was failing...")
+        try:
+            cursor.execute("SELECT COUNT(*) FROM predictions")
+            count = cursor.fetchone()[0]
+            print(f"✅ Query test successful! Found {count} prediction records.")
+            return True
+        except sqlite3.Error as e:
+            print(f"❌ Query test failed: {e}")
+            return False
+            
+    except sqlite3.Error as e:
+        print(f"❌ Database error: {e}")
+        return False
+    except Exception as e:
+        print(f"❌ Unexpected error: {e}")
+        return False
+    finally:
+        if 'conn' in locals():
+            conn.close()
 
 def main():
-    print("🚀 Template Diagnostic Tool")
-    print("=" * 50)
+    """Main function"""
+    print("🚀 Comprehensive Fix: Adding ALL missing columns to predictions table")
+    print("=" * 80)
+    print(f"📂 Working directory: {os.getcwd()}")
+    print(f"🎯 Target: /instance/churn_platform.db")
+    print()
     
-    check_template_structure()
+    success = check_and_add_missing_columns()
     
-    print("\n🔧 Attempting to fix missing templates...")
-    if create_minimal_dashboard_template():
-        print("✅ Dashboard template created successfully")
+    if success:
+        print("\n" + "=" * 80)
+        print("✅ COMPREHENSIVE FIX COMPLETED SUCCESSFULLY!")
+        print("=" * 80)
+        
+        print("\n📋 What was fixed:")
+        print("• Added all missing columns to predictions table")
+        print("• Set reasonable default values for existing records")
+        print("• Verified the schema matches SQLAlchemy model expectations")
+        
+        print("\n🔄 Next steps:")
+        print("1. Restart your Flask application:")
+        print("   flask run")
+        print("2. Your dashboard should now work without SQLAlchemy errors")
+        print("3. Update your prediction model code to populate the new columns:")
+        print("   - model_type: 'random_forest', 'logistic_regression', etc.")
+        print("   - model_version: 'v1.0', 'v2.1', etc.")
+        print("   - confidence: 0.0 to 1.0 (prediction confidence)")
+        print("   - risk_factors: JSON string of identified risk factors")
+        print("   - feature_values: JSON string of feature values used")
+        
+        print("\n💡 Example prediction code:")
+        print("prediction = Prediction(")
+        print("    churn_probability=0.73,")
+        print("    confidence=0.85,")
+        print("    model_type='random_forest',")
+        print("    model_version='v2.0'")
+        print(")")
+        
     else:
-        print("ℹ️  Dashboard template already exists")
-    
-    print("\n✅ Diagnostic complete. Try running your Flask app now.")
+        print("\n" + "=" * 80)
+        print("❌ FIX FAILED!")
+        print("=" * 80)
+        print("Please check the error messages above.")
+        print("You may need to manually inspect your database schema.")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

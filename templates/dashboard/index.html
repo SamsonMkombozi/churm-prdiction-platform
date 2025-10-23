@@ -369,13 +369,13 @@
                                                 <td>5 min ago</td>
                                                 <td><i class="fas fa-sync text-primary me-2"></i>Data Sync</td>
                                                 <td><span class="badge bg-success">Completed</span></td>
-                                                <td>1,247 customers synced</td>
+                                                <td>{{ stats.total_customers|default(0) }} customers synced</td>
                                             </tr>
                                             <tr>
                                                 <td>1 hour ago</td>
                                                 <td><i class="fas fa-brain text-info me-2"></i>Prediction Run</td>
                                                 <td><span class="badge bg-success">Completed</span></td>
-                                                <td>89 high-risk customers identified</td>
+                                                <td>{{ stats.high_risk_customers|default(0) }} high-risk customers identified</td>
                                             </tr>
                                             <tr>
                                                 <td>2 hours ago</td>
@@ -524,69 +524,28 @@
                         </div>
                 </div>
 
+
+                
+
                 <!-- High Risk Customers Table -->
-                <div class="row mb-4">
-                    <div class="col-12">
-                        <div class="card action-card">
-                            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                                <h6 class="m-0 font-weight-bold text-primary">
-                                    <i class="fas fa-exclamation-triangle me-2"></i>High Risk Customers
-                                </h6>
-                                <button class="btn btn-sm btn-outline-primary">
-                                    <i class="fas fa-eye me-1"></i>View All
-                                </button>
-                            </div>
-                            <div class="card-body">
-                                <div class="table-responsive">
-                                    <table class="table table-hover">
-                                        <thead class="table-light">
-                                            <tr>
-                                                <th>Customer ID</th>
-                                                <th>Name</th>
-                                                <th>Risk Score</th>
-                                                <th>Last Activity</th>
-                                                <th>Value</th>
-                                                <th>Action</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr>
-                                                <td>#12847</td>
-                                                <td>Sarah Johnson</td>
-                                                <td><span class="risk-indicator risk-high">92%</span></td>
-                                                <td>3 days ago</td>
-                                                <td>$2,450</td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-primary">Contact</button>
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td>#11239</td>
-                                                <td>Michael Chen</td>
-                                                <td><span class="risk-indicator risk-high">89%</span></td>
-                                                <td>1 week ago</td>
-                                                <td>$3,200</td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-primary">Contact</button>
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td>#10856</td>
-                                                <td>Emily Rodriguez</td>
-                                                <td><span class="risk-indicator risk-high">85%</span></td>
-                                                <td>5 days ago</td>
-                                                <td>$1,890</td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-primary">Contact</button>
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
+                {% for customer in high_risk_customers %}
+                    <div class="alert alert-danger d-flex align-items-center" role="alert">
+                        <i class="fas fa-exclamation-triangle fa-2x me-3"></i>
+                        <div class="flex-grow-1">
+                            <h6 class="alert-heading mb-1">{{ customer.customer_name }}</h6>
+                            <p class="mb-1">
+                                <strong>{{ (customer.churn_probability * 100)|round(1) }}% churn probability</strong> - 
+                                Last payment: {{ customer.last_payment_date|date if customer.last_payment_date else 'Never' }}
+                            </p>
+                            <small>Tenure: {{ customer.tenure_months }} months | Balance: ${{ customer.outstanding_balance }}</small>
+                        </div>
+                        <div>
+                            <button class="btn btn-sm btn-outline-danger">
+                                <i class="fas fa-phone"></i> Contact
+                            </button>
                         </div>
                     </div>
-                </div>
+                {% endfor %}
 
                     <!-- Bootstrap JS -->
     <!--<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script> -->
