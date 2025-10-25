@@ -80,9 +80,9 @@ def index():
                         'medium_risk_customers': medium_risk,
                         'low_risk_customers': low_risk,
                         'prediction_accuracy': 85.2,
-                        'total_tickets': company.get_ticket_count(),
-                        'total_payments': company.get_payment_count(),
-                        'active_users': company.get_active_user_count(),
+                        'total_tickets': getattr(company, 'get_ticket_count', lambda: 0)(),
+                        'total_payments': getattr(company, 'get_payment_count', lambda: 0)(),
+                        'active_users': getattr(company, 'get_active_user_count', lambda: 0)(),
                         'has_predictions': high_risk > 0 or medium_risk > 0
                     })
                     
@@ -163,9 +163,9 @@ def api_stats():
                     'total_customers': total_customers,
                     'at_risk_customers': high_risk + medium_risk,
                     'high_risk_customers': high_risk,
-                    'total_tickets': company.get_ticket_count(),
-                    'total_payments': company.get_payment_count(),
-                    'active_users': company.get_active_user_count()
+                    'total_tickets': getattr(company, 'get_ticket_count', lambda: 0)(),
+                    'total_payments': getattr(company, 'get_payment_count', lambda: 0)(),
+                    'active_users': getattr(company, 'get_active_user_count', lambda: 0)()
                 })
         
         return jsonify(stats)
