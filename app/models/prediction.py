@@ -1,8 +1,8 @@
 """
-Fixed Prediction Model with Better Error Handling
-app/models/prediction.py
+Fixed Prediction Model - Handles will_churn column
+app/models/prediction_fixed.py
 
-Database model for storing churn predictions with fallbacks for missing columns
+Replace your existing prediction.py model with this version
 """
 from app.extensions import db
 from datetime import datetime
@@ -31,6 +31,9 @@ class Prediction(db.Model):
     churn_probability = db.Column(db.Float, nullable=False)
     churn_risk = db.Column(db.String(20), nullable=False)  # low, medium, high
     
+    # ✅ FIX: Add will_churn column (boolean prediction result)
+    will_churn = db.Column(db.Boolean, nullable=False, default=False)
+    
     # Optional fields with defaults (for backward compatibility)
     confidence = db.Column(db.String(20), default='medium')  # low, medium, high
     model_version = db.Column(db.String(50), default='1.0.0')
@@ -58,6 +61,7 @@ class Prediction(db.Model):
             'customer_id': self.customer_id,
             'churn_probability': self.churn_probability,
             'churn_risk': self.churn_risk,
+            'will_churn': self.will_churn,
             'confidence': getattr(self, 'confidence', 'medium'),
             'model_version': getattr(self, 'model_version', '1.0.0'),
             'model_type': getattr(self, 'model_type', 'RandomForest'),
@@ -92,6 +96,7 @@ class Prediction(db.Model):
     def create_prediction(cls, company_id, customer_id, prediction_result):
         """
         Create a new prediction record safely
+        ✅ FIXED: Now includes will_churn calculation
         
         Args:
             company_id: Company ID
@@ -105,12 +110,16 @@ class Prediction(db.Model):
         churn_probability = prediction_result.get('churn_probability', 0.0)
         churn_risk = prediction_result.get('churn_risk', 'medium')
         
+        # ✅ FIX: Calculate will_churn based on probability threshold
+        will_churn = churn_probability > 0.5  # True if >50% chance of churn
+        
         # Create base prediction
         prediction_data = {
             'company_id': company_id,
             'customer_id': str(customer_id),
             'churn_probability': float(churn_probability),
-            'churn_risk': churn_risk
+            'churn_risk': churn_risk,
+            'will_churn': will_churn  # ✅ FIX: Include will_churn
         }
         
         # Add optional fields if they exist in the model
@@ -134,16 +143,28 @@ class Prediction(db.Model):
             return prediction
         except Exception as e:
             db.session.rollback()
+            # ✅ Enhanced error handling with will_churn
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to create prediction: {e}")
+            logger.error(f"Prediction data: {prediction_data}")
+            
             # Try with minimal data if full creation fails
-            minimal_prediction = cls(
-                company_id=company_id,
-                customer_id=str(customer_id),
-                churn_probability=float(churn_probability),
-                churn_risk=churn_risk
-            )
-            db.session.add(minimal_prediction)
-            db.session.commit()
-            return minimal_prediction
+            try:
+                minimal_prediction = cls(
+                    company_id=company_id,
+                    customer_id=str(customer_id),
+                    churn_probability=float(churn_probability),
+                    churn_risk=churn_risk,
+                    will_churn=will_churn  # ✅ Include in minimal version too
+                )
+                db.session.add(minimal_prediction)
+                db.session.commit()
+                return minimal_prediction
+            except Exception as e2:
+                logger.error(f"Minimal prediction creation also failed: {e2}")
+                db.session.rollback()
+                return None
     
     @classmethod
     def get_latest_for_customer(cls, company_id, customer_id):
@@ -188,5 +209,39 @@ class Prediction(db.Model):
             # If that fails, query only core columns
             from sqlalchemy import select
             core_columns = [cls.id, cls.company_id, cls.customer_id, 
-                          cls.churn_probability, cls.churn_risk, cls.created_at]
+                          cls.churn_probability, cls.churn_risk, cls.will_churn, cls.created_at]
             return db.session.query(*core_columns).filter_by(company_id=company_id)
+    
+    @classmethod
+    def get_churn_predictions(cls, company_id, will_churn=True):
+        """Get predictions for customers who will/won't churn"""
+        return cls.query.filter_by(
+            company_id=company_id,
+            will_churn=will_churn
+        ).all()
+    
+    @classmethod
+    def get_accuracy_stats(cls, company_id):
+        """Get accuracy statistics for predictions"""
+        from sqlalchemy import func
+        
+        try:
+            stats = db.session.query(
+                func.count(cls.id).label('total'),
+                func.sum(func.cast(cls.will_churn, db.Integer)).label('predicted_churn'),
+                func.avg(cls.churn_probability).label('avg_probability')
+            ).filter_by(company_id=company_id).first()
+            
+            return {
+                'total_predictions': stats.total or 0,
+                'predicted_churn_count': stats.predicted_churn or 0,
+                'predicted_churn_rate': (stats.predicted_churn / stats.total * 100) if stats.total else 0,
+                'average_probability': round(stats.avg_probability or 0, 3)
+            }
+        except Exception as e:
+            return {
+                'total_predictions': 0,
+                'predicted_churn_count': 0,
+                'predicted_churn_rate': 0,
+                'average_probability': 0
+            }

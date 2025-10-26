@@ -9,8 +9,8 @@
             <i class="fas fa-user me-2"></i>{{ customer.customer_name }}
         </h1>
         <div class="btn-toolbar">
-            <!-- ✅ FIXED: Add predict button for single customer -->
-            <button type="button" class="btn btn-warning me-2" onclick="runSinglePrediction({{ customer.id }})">
+            <!-- ✅ FALLBACK: Works with existing /prediction/predict endpoint -->
+            <button type="button" class="btn btn-warning me-2" id="predictBtn" onclick="runSinglePrediction()">
                 <i class="fas fa-brain me-2"></i>Update Prediction
             </button>
             <a href="{{ url_for('crm.customers') }}" class="btn btn-outline-secondary">
@@ -87,16 +87,16 @@
                     <div class="row">
                         <div class="col-md-4 text-center mb-3">
                             <div class="text-muted small">Monthly Charges</div>
-                            <div class="h4 mb-0">KSH {{ "{:,.0f}".format(customer.monthly_charges) }}</div>
+                            <div class="h4 mb-0">TZS {{ "{:,.0f}".format(customer.monthly_charges) }}</div>
                         </div>
                         <div class="col-md-4 text-center mb-3">
                             <div class="text-muted small">Total Charges</div>
-                            <div class="h4 mb-0">KSH {{ "{:,.0f}".format(customer.total_charges) }}</div>
+                            <div class="h4 mb-0">TZS {{ "{:,.0f}".format(customer.total_charges) }}</div>
                         </div>
                         <div class="col-md-4 text-center mb-3">
                             <div class="text-muted small">Outstanding Balance</div>
                             <div class="h4 mb-0 text-{{ 'danger' if customer.outstanding_balance > 0 else 'success' }}">
-                                KSH {{ "{:,.0f}".format(customer.outstanding_balance) }}
+                                TZS {{ "{:,.0f}".format(customer.outstanding_balance) }}
                             </div>
                         </div>
                     </div>
@@ -142,10 +142,10 @@
                 </div>
             </div>
 
-            <!-- ✅ FIXED: Enhanced Churn Risk Card with Better Logic -->
-            {% if customer.churn_risk and customer.churn_probability %}
-            <div class="card shadow border-left-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }}">
+            <!-- ✅ ENHANCED: Churn Risk Card -->
+            <div id="churnRiskCard" class="card shadow border-left-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' if customer.churn_risk else 'secondary' }}">
                 <div class="card-body text-center">
+                    {% if customer.churn_risk and customer.churn_probability %}
                     <i class="fas fa-exclamation-triangle fa-2x text-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }} mb-2"></i>
                     <h3 class="mb-0">{{ customer.churn_risk|upper }}</h3>
                     <p class="text-muted mb-2">Churn Risk</p>
@@ -162,7 +162,7 @@
                         Predicted: {{ customer.last_prediction_date|datetime if customer.last_prediction_date else 'Not available' }}
                     </small>
                     
-                    <!-- ✅ FIXED: Risk-specific action recommendations -->
+                    <!-- Risk-specific action recommendations -->
                     {% if customer.churn_risk == 'high' %}
                     <div class="alert alert-danger mt-3 small">
                         <strong>Action Required:</strong>
@@ -186,24 +186,19 @@
                         <strong>Low Risk:</strong> Customer appears stable. Continue regular service.
                     </div>
                     {% endif %}
-                </div>
-            </div>
-            {% else %}
-            <!-- ✅ FIXED: Show when no prediction is available -->
-            <div class="card shadow border-left-secondary">
-                <div class="card-body text-center">
+                    {% else %}
                     <i class="fas fa-question-circle fa-2x text-secondary mb-2"></i>
                     <h5 class="mb-0">No Prediction</h5>
                     <p class="text-muted mb-2">Churn risk not calculated</p>
-                    <button class="btn btn-sm btn-primary" onclick="runSinglePrediction({{ customer.id }})">
+                    <button class="btn btn-sm btn-primary" onclick="runSinglePrediction()">
                         <i class="fas fa-brain me-1"></i>Generate Prediction
                     </button>
                     <small class="text-muted d-block mt-2">
                         Click to run ML analysis for this customer
                     </small>
+                    {% endif %}
                 </div>
             </div>
-            {% endif %}
         </div>
     </div>
 
@@ -285,7 +280,7 @@
                                 {% for payment in payments %}
                                 <tr>
                                     <td><code class="small">{{ payment.transaction_id or payment.id }}</code></td>
-                                    <td><strong>KSH {{ "{:,.0f}".format(payment.amount) }}</strong></td>
+                                    <td><strong>TZS {{ "{:,.0f}".format(payment.amount) }}</strong></td>
                                     <td>
                                         <span class="badge bg-secondary">
                                             {{ payment.payment_method|upper|replace('_', ' ') if payment.payment_method else 'N/A' }}
@@ -313,48 +308,145 @@
     </div>
 </div>
 
-<!-- ✅ FIXED: Add JavaScript for single customer prediction -->
+<!-- ✅ FALLBACK: Works with existing /prediction/predict endpoint -->
 <script>
-function runSinglePrediction(customerId) {
-    // Show loading state
-    const button = event.target.closest('button');
+function runSinglePrediction() {
+    const button = document.getElementById('predictBtn');
     const originalHtml = button.innerHTML;
+    
+    // Show loading state
     button.disabled = true;
     button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Predicting...';
     
-    // Make AJAX request to predict single customer
+    // Customer data from template
+    const customerData = {
+        id: {{ customer.id }},
+        tenure_months: {{ customer.tenure_months or 0 }},
+        monthly_charges: {{ customer.monthly_charges or 0 }},
+        total_charges: {{ customer.total_charges or 0 }},
+        outstanding_balance: {{ customer.outstanding_balance or 0 }},
+        total_tickets: {{ customer.total_tickets or 0 }},
+        total_payments: {{ customer.total_payments or 0 }}
+    };
+    
+    console.log('Sending prediction request with data:', customerData);
+    
+    // Use the existing /prediction/predict endpoint
     fetch('/prediction/predict', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-            customer_id: customerId
-        })
+        body: JSON.stringify(customerData)
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('Response status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(data => {
+        console.log('Prediction response:', data);
+        
         if (data.status === 'success') {
             // Show success message
-            alert(`✅ Prediction updated!\nRisk Level: ${data.result.churn_risk.toUpperCase()}\nProbability: ${Math.round(data.result.churn_probability * 100)}%`);
+            const result = data.result;
+            const probability = Math.round(result.churn_probability * 100);
+            const risk = result.churn_risk.toUpperCase();
+            
+            let message = `✅ Prediction Completed!\n\n`;
+            message += `🎯 Risk Level: ${risk}\n`;
+            message += `📊 Probability: ${probability}%\n`;
+            message += `🔍 Confidence: ${result.confidence.toUpperCase()}\n`;
+            
+            if (result.risk_factors && result.risk_factors.length > 0) {
+                message += `\n⚠️ Top Risk Factors:\n`;
+                result.risk_factors.slice(0, 3).forEach(factor => {
+                    message += `• ${factor}\n`;
+                });
+            }
+            
+            alert(message);
             
             // Reload page to show updated prediction
             setTimeout(() => {
                 window.location.reload();
-            }, 1000);
+            }, 1500);
         } else {
-            alert(`❌ Error: ${data.message}`);
+            throw new Error(data.message || 'Prediction failed');
         }
     })
     .catch(error => {
-        console.error('Error:', error);
-        alert('❌ Network error occurred');
+        console.error('Prediction error:', error);
+        
+        let errorMessage = '❌ Prediction Error\n\n';
+        
+        if (error.message.includes('404')) {
+            errorMessage += 'Prediction endpoint not found. Please check if the prediction service is properly configured.';
+        } else if (error.message.includes('500')) {
+            errorMessage += 'Internal server error. The prediction model may not be loaded properly.';
+        } else if (error.message.includes('NetworkError') || error.name === 'TypeError') {
+            errorMessage += 'Network error. Please check your connection and try again.';
+        } else {
+            errorMessage += `Error: ${error.message}`;
+        }
+        
+        alert(errorMessage);
     })
     .finally(() => {
-        // Restore button
+        // Restore button state
         button.disabled = false;
         button.innerHTML = originalHtml;
     });
 }
+
+// ✅ Keyboard shortcut for quick prediction (Ctrl/Cmd + P)
+document.addEventListener('keydown', function(event) {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'p') {
+        event.preventDefault();
+        runSinglePrediction();
+    }
+});
+
+// ✅ Debug: Log customer data on page load
+console.log('Customer ID:', {{ customer.id }});
+console.log('Customer data available for prediction:', {
+    id: {{ customer.id }},
+    tenure_months: {{ customer.tenure_months or 0 }},
+    monthly_charges: {{ customer.monthly_charges or 0 }},
+    total_charges: {{ customer.total_charges or 0 }},
+    outstanding_balance: {{ customer.outstanding_balance or 0 }},
+    total_tickets: {{ customer.total_tickets or 0 }},
+    total_payments: {{ customer.total_payments or 0 }}
+});
 </script>
+
+<!-- ✅ CSS for better visual feedback -->
+<style>
+.border-left-primary { border-left: 4px solid #007bff !important; }
+.border-left-info { border-left: 4px solid #17a2b8 !important; }
+.border-left-success { border-left: 4px solid #28a745 !important; }
+.border-left-warning { border-left: 4px solid #ffc107 !important; }
+.border-left-danger { border-left: 4px solid #dc3545 !important; }
+.border-left-secondary { border-left: 4px solid #6c757d !important; }
+
+/* Loading state styling */
+button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* Success animation */
+.prediction-success {
+    animation: successPulse 2s ease-in-out;
+    border: 2px solid #28a745 !important;
+}
+
+@keyframes successPulse {
+    0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+}
+</style>
 {% endblock %}
