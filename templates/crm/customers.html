@@ -46,7 +46,7 @@
                         High Risk
                     </div>
                     <div class="h5 mb-0 font-weight-bold">
-                        {{ customers|selectattr('churn_risk', 'equalto', 'high')|list|length|number }}
+                        {{ customers|selectattr('churn_risk', 'equalto', 'HIGH')|list|length|number }}
                     </div>
                 </div>
             </div>
