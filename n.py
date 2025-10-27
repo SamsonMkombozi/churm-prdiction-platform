@@ -1,102 +1,144 @@
 """
-Database Migration - Add will_churn column
-migrate_will_churn.py
+Database Migration Script - Add predicted_at Column
+run_migration.py
 
-Run this to add the will_churn column to existing predictions table
+This script adds the missing predicted_at column to the predictions table
 """
+import sqlite3
+import os
+from datetime import datetime
 
-def migrate_will_churn_column():
-    """Add will_churn column to predictions table"""
+def migrate_predictions_table():
+    """Add predicted_at column to predictions table"""
+    
+    # Database path (adjust if needed)
+    db_path = 'instance/churn_platform.db'
+    
+    if not os.path.exists(db_path):
+        print(f"❌ Database not found at {db_path}")
+        print("Please update the db_path variable to point to your database file")
+        return False
+    
     try:
-        from app import create_app
-        from app.extensions import db
+        # Connect to database
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
         
-        app = create_app()
+        # Check if predictions table exists
+        cursor.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='predictions'
+        """)
         
-        with app.app_context():
-            print("🔄 Migrating predictions table to add will_churn column...")
-            
-            # Check if column already exists
-            inspector = db.inspect(db.engine)
-            columns = [col['name'] for col in inspector.get_columns('predictions')]
-            
-            if 'will_churn' in columns:
-                print("✅ will_churn column already exists!")
-                return
-            
-            print("📝 Adding will_churn column...")
-            
-            # Add the column
-            with db.engine.connect() as conn:
-                # SQLite syntax for adding column
-                conn.execute(db.text(
-                    "ALTER TABLE predictions ADD COLUMN will_churn BOOLEAN DEFAULT 0"
-                ))
-                conn.commit()
-            
-            print("✅ will_churn column added successfully!")
-            
-            # Update existing records based on churn_probability
-            print("🔄 Updating existing predictions...")
-            
-            with db.engine.connect() as conn:
-                # Set will_churn = 1 where churn_probability > 0.5
-                result = conn.execute(db.text(
-                    "UPDATE predictions SET will_churn = 1 WHERE churn_probability > 0.5"
-                ))
-                
-                # Set will_churn = 0 where churn_probability <= 0.5
-                conn.execute(db.text(
-                    "UPDATE predictions SET will_churn = 0 WHERE churn_probability <= 0.5"
-                ))
-                
-                conn.commit()
-                
-                print(f"✅ Updated {result.rowcount} existing prediction records")
-            
-            print("🎉 Migration completed successfully!")
-            
+        if not cursor.fetchone():
+            print("❌ Predictions table not found")
+            return False
+        
+        # Check if predicted_at column already exists
+        cursor.execute("PRAGMA table_info(predictions)")
+        columns = [column[1] for column in cursor.fetchall()]
+        
+        if 'predicted_at' in columns:
+            print("✅ predicted_at column already exists")
+            return True
+        
+        print("🔄 Adding predicted_at column...")
+        
+        # Add the predicted_at column
+        cursor.execute("""
+            ALTER TABLE predictions 
+            ADD COLUMN predicted_at DATETIME
+        """)
+        
+        # Update existing records to use created_at as predicted_at
+        current_time = datetime.utcnow().isoformat()
+        cursor.execute("""
+            UPDATE predictions 
+            SET predicted_at = COALESCE(created_at, ?)
+            WHERE predicted_at IS NULL
+        """, (current_time,))
+        
+        # Count updated records
+        cursor.execute("SELECT COUNT(*) FROM predictions WHERE predicted_at IS NOT NULL")
+        updated_count = cursor.fetchone()[0]
+        
+        # Commit changes
+        conn.commit()
+        
+        print(f"✅ Migration completed successfully!")
+        print(f"   - Added predicted_at column")
+        print(f"   - Updated {updated_count} existing records")
+        
+        return True
+        
     except Exception as e:
         print(f"❌ Migration failed: {e}")
-        import traceback
-        traceback.print_exc()
+        if 'conn' in locals():
+            conn.rollback()
+        return False
+        
+    finally:
+        if 'conn' in locals():
+            conn.close()
 
 def verify_migration():
-    """Verify the migration worked"""
+    """Verify that the migration was successful"""
+    db_path = '/instance/Churn_platform.db'
+    
     try:
-        from app import create_app
-        from app.models.prediction import Prediction
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
         
-        app = create_app()
+        # Check table structure
+        cursor.execute("PRAGMA table_info(predictions)")
+        columns = {column[1]: column[2] for column in cursor.fetchall()}
         
-        with app.app_context():
-            print("\n🔍 Verifying migration...")
-            
-            # Count predictions by will_churn value
-            total = Prediction.query.count()
-            will_churn_true = Prediction.query.filter_by(will_churn=True).count()
-            will_churn_false = Prediction.query.filter_by(will_churn=False).count()
-            
-            print(f"   Total predictions: {total}")
-            print(f"   Will churn (True): {will_churn_true}")
-            print(f"   Will not churn (False): {will_churn_false}")
-            
-            if will_churn_true + will_churn_false == total:
-                print("✅ Migration verification successful!")
-            else:
-                print("⚠️ Migration verification found inconsistencies")
-                
+        print("\n📋 Current predictions table structure:")
+        for col_name, col_type in columns.items():
+            marker = "✅" if col_name == 'predicted_at' else "  "
+            print(f"{marker} {col_name}: {col_type}")
+        
+        # Check data
+        cursor.execute("""
+            SELECT COUNT(*) as total,
+                   COUNT(predicted_at) as with_predicted_at
+            FROM predictions
+        """)
+        
+        result = cursor.fetchone()
+        total_records = result[0]
+        records_with_predicted_at = result[1]
+        
+        print(f"\n📊 Data verification:")
+        print(f"   Total records: {total_records}")
+        print(f"   Records with predicted_at: {records_with_predicted_at}")
+        
+        if total_records > 0 and records_with_predicted_at == total_records:
+            print("✅ All records have predicted_at values")
+        elif total_records > 0:
+            print(f"⚠️  {total_records - records_with_predicted_at} records missing predicted_at")
+        
+        return True
+        
     except Exception as e:
         print(f"❌ Verification failed: {e}")
+        return False
+        
+    finally:
+        if 'conn' in locals():
+            conn.close()
 
 if __name__ == "__main__":
-    print("🗄️ Database Migration: Adding will_churn column")
-    print("=" * 50)
+    print("🚀 Starting predictions table migration...")
     
-    migrate_will_churn_column()
-    verify_migration()
+    # Run migration
+    if migrate_predictions_table():
+        print("\n🔍 Verifying migration...")
+        verify_migration()
+    else:
+        print("\n❌ Migration failed - see errors above")
     
-    print("\n📋 Next Steps:")
-    print("1. Replace your prediction model with prediction_model_fixed.py")
+    print("\n📝 Next steps:")
+    print("1. Replace your app/models/prediction.py with the fixed version")
     print("2. Restart your Flask application")
-    print("3. Test the prediction functionality")
+    print("3. Test predictions again")

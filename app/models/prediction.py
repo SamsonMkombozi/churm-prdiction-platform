@@ -1,6 +1,6 @@
 """
-Fixed Prediction Model - Handles will_churn column
-app/models/prediction_fixed.py
+Fixed Prediction Model - Includes predicted_at column
+app/models/prediction.py
 
 Replace your existing prediction.py model with this version
 """
@@ -34,6 +34,9 @@ class Prediction(db.Model):
     # ✅ FIX: Add will_churn column (boolean prediction result)
     will_churn = db.Column(db.Boolean, nullable=False, default=False)
     
+    # ✅ FIX: Add predicted_at column that the database expects
+    predicted_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    
     # Optional fields with defaults (for backward compatibility)
     confidence = db.Column(db.String(20), default='medium')  # low, medium, high
     model_version = db.Column(db.String(50), default='1.0.0')
@@ -62,6 +65,7 @@ class Prediction(db.Model):
             'churn_probability': self.churn_probability,
             'churn_risk': self.churn_risk,
             'will_churn': self.will_churn,
+            'predicted_at': self.predicted_at.isoformat() if self.predicted_at else None,
             'confidence': getattr(self, 'confidence', 'medium'),
             'model_version': getattr(self, 'model_version', '1.0.0'),
             'model_type': getattr(self, 'model_type', 'RandomForest'),
@@ -96,7 +100,7 @@ class Prediction(db.Model):
     def create_prediction(cls, company_id, customer_id, prediction_result):
         """
         Create a new prediction record safely
-        ✅ FIXED: Now includes will_churn calculation
+        ✅ FIXED: Now includes predicted_at and will_churn calculation
         
         Args:
             company_id: Company ID
@@ -113,13 +117,19 @@ class Prediction(db.Model):
         # ✅ FIX: Calculate will_churn based on probability threshold
         will_churn = churn_probability > 0.5  # True if >50% chance of churn
         
+        # ✅ FIX: Set predicted_at timestamp
+        predicted_at = prediction_result.get('prediction_date', datetime.utcnow())
+        if not isinstance(predicted_at, datetime):
+            predicted_at = datetime.utcnow()
+        
         # Create base prediction
         prediction_data = {
             'company_id': company_id,
             'customer_id': str(customer_id),
             'churn_probability': float(churn_probability),
             'churn_risk': churn_risk,
-            'will_churn': will_churn  # ✅ FIX: Include will_churn
+            'will_churn': will_churn,
+            'predicted_at': predicted_at  # ✅ FIX: Include predicted_at
         }
         
         # Add optional fields if they exist in the model
@@ -143,7 +153,7 @@ class Prediction(db.Model):
             return prediction
         except Exception as e:
             db.session.rollback()
-            # ✅ Enhanced error handling with will_churn
+            # ✅ Enhanced error handling with predicted_at
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Failed to create prediction: {e}")
@@ -156,7 +166,8 @@ class Prediction(db.Model):
                     customer_id=str(customer_id),
                     churn_probability=float(churn_probability),
                     churn_risk=churn_risk,
-                    will_churn=will_churn  # ✅ Include in minimal version too
+                    will_churn=will_churn,
+                    predicted_at=predicted_at  # ✅ Include in minimal version too
                 )
                 db.session.add(minimal_prediction)
                 db.session.commit()
@@ -172,14 +183,14 @@ class Prediction(db.Model):
         return cls.query.filter_by(
             company_id=company_id,
             customer_id=str(customer_id)
-        ).order_by(cls.created_at.desc()).first()
+        ).order_by(cls.predicted_at.desc()).first()
     
     @classmethod
     def get_company_predictions(cls, company_id, limit=100):
         """Get recent predictions for a company"""
         return cls.query.filter_by(
             company_id=company_id
-        ).order_by(cls.created_at.desc()).limit(limit).all()
+        ).order_by(cls.predicted_at.desc()).limit(limit).all()
     
     @classmethod
     def get_risk_distribution(cls, company_id):
@@ -209,7 +220,8 @@ class Prediction(db.Model):
             # If that fails, query only core columns
             from sqlalchemy import select
             core_columns = [cls.id, cls.company_id, cls.customer_id, 
-                          cls.churn_probability, cls.churn_risk, cls.will_churn, cls.created_at]
+                          cls.churn_probability, cls.churn_risk, cls.will_churn, 
+                          cls.predicted_at, cls.created_at]
             return db.session.query(*core_columns).filter_by(company_id=company_id)
     
     @classmethod
@@ -245,3 +257,22 @@ class Prediction(db.Model):
                 'predicted_churn_rate': 0,
                 'average_probability': 0
             }
+
+    @classmethod
+    def get_predictions_by_date_range(cls, company_id, start_date, end_date):
+        """Get predictions within a date range"""
+        return cls.query.filter(
+            cls.company_id == company_id,
+            cls.predicted_at >= start_date,
+            cls.predicted_at <= end_date
+        ).all()
+    
+    @classmethod
+    def get_recent_predictions(cls, company_id, days=30):
+        """Get predictions from the last N days"""
+        from datetime import timedelta
+        start_date = datetime.utcnow() - timedelta(days=days)
+        return cls.query.filter(
+            cls.company_id == company_id,
+            cls.predicted_at >= start_date
+        ).order_by(cls.predicted_at.desc()).all()
