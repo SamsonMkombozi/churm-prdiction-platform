@@ -1,4 +1,6 @@
+# Fixed Dashboard Controller - Real Batch Predictions
 # app/controllers/dashboard_controller.py
+
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
 from datetime import datetime
@@ -237,6 +239,170 @@ def index():
                              stats=safe_stats,
                              high_risk_data=None)
 
+@dashboard_bp.route('/run-predictions', methods=['POST'])
+@login_required
+def run_predictions():
+    """
+    ✅ FIXED: Run batch predictions for ALL real customers in the company
+    No more mocked data - processes actual customer records
+    """
+    try:
+        logger.info("🚀 Starting REAL batch prediction process for dashboard")
+        
+        # Get current user's company
+        if not current_user.company_id:
+            return jsonify({
+                'success': False,
+                'error': 'No company associated with your account'
+            }), 400
+        
+        from app.models.company import Company
+        from app.models.customer import Customer
+        
+        company = Company.query.get(current_user.company_id)
+        if not company:
+            return jsonify({
+                'success': False,
+                'error': 'Company not found'
+            }), 404
+        
+        # ✅ REAL DATA: Get all actual customers from the database
+        customers = Customer.query.filter_by(company_id=company.id).all()
+        
+        if not customers:
+            return jsonify({
+                'success': False,
+                'error': 'No customers found in your company database. Please sync CRM data first.'
+            }), 400
+        
+        logger.info(f"📊 Found {len(customers)} real customers to process")
+        
+        # ✅ REAL DATA: Convert customers to prediction input format
+        customers_data = []
+        for customer in customers:
+            customer_data = {
+                'id': customer.id,
+                'tenure_months': customer.tenure_months or 0,
+                'monthly_charges': customer.monthly_charges or 0,
+                'total_charges': customer.total_charges or 0,
+                'outstanding_balance': customer.outstanding_balance or 0,
+                'total_tickets': customer.total_tickets or 0,
+                'total_payments': customer.total_payments or 0
+            }
+            customers_data.append(customer_data)
+        
+        logger.info(f"✅ Prepared {len(customers_data)} customer records for prediction")
+        
+        # ✅ REAL PROCESSING: Use the actual prediction service
+        from app.services.prediction_service import ChurnPredictionService
+        
+        prediction_service = ChurnPredictionService()
+        
+        if not prediction_service.is_trained:
+            logger.warning("⚠️ Prediction model not loaded, using fallback")
+        
+        # Run batch prediction on real customer data
+        logger.info("🔄 Running predictions on real customer data...")
+        prediction_results = prediction_service.predict_batch(customers_data)
+        
+        # ✅ REAL DATABASE UPDATES: Save results and update customer records
+        from app.models.prediction import Prediction
+        from app.extensions import db
+        
+        saved_count = 0
+        updated_customers = 0
+        high_risk_count = 0
+        medium_risk_count = 0
+        low_risk_count = 0
+        
+        logger.info(f"💾 Saving {len(prediction_results)} prediction results to database...")
+        
+        for result in prediction_results:
+            try:
+                customer_id = result['customer_id']
+                
+                # Update customer record with prediction
+                customer = Customer.query.filter_by(id=customer_id, company_id=company.id).first()
+                if customer:
+                    customer.churn_probability = result['churn_probability']
+                    customer.churn_risk = result['churn_risk']
+                    
+                    # Try to update last_prediction_date
+                    try:
+                        customer.last_prediction_date = datetime.utcnow()
+                    except Exception as e:
+                        logger.warning(f"Could not update last_prediction_date: {e}")
+                    
+                    updated_customers += 1
+                    
+                    # Count risk levels
+                    if result['churn_risk'] == 'high':
+                        high_risk_count += 1
+                    elif result['churn_risk'] == 'medium':
+                        medium_risk_count += 1
+                    else:
+                        low_risk_count += 1
+                    
+                    logger.debug(f"Updated customer {customer_id}: {result['churn_risk']} risk ({result['churn_probability']:.3f})")
+                
+                # Save detailed prediction record
+                try:
+                    prediction = Prediction.create_prediction(
+                        company_id=company.id,
+                        customer_id=customer.crm_customer_id if customer and customer.crm_customer_id else str(customer_id),
+                        prediction_result=result
+                    )
+                    if prediction:
+                        saved_count += 1
+                except Exception as e:
+                    logger.warning(f"Could not save prediction for customer {customer_id}: {e}")
+                    
+            except Exception as e:
+                logger.error(f"Error processing customer {result.get('customer_id', 'unknown')}: {e}")
+        
+        # Commit all changes
+        try:
+            db.session.commit()
+            logger.info(f"✅ Database commit successful: {updated_customers} customers updated, {saved_count} predictions saved")
+        except Exception as e:
+            logger.error(f"❌ Database commit failed: {e}")
+            db.session.rollback()
+            return jsonify({
+                'success': False,
+                'error': f'Failed to save predictions: {str(e)}'
+            }), 500
+        
+        # ✅ REAL RESULTS: Return actual processing results
+        success_message = f'Successfully processed {len(customers)} real customers'
+        
+        response_data = {
+            'success': True,
+            'message': success_message,
+            'results': {
+                'total_processed': len(customers),
+                'predictions_saved': saved_count,
+                'customers_updated': updated_customers,
+                'high_risk': high_risk_count,
+                'medium_risk': medium_risk_count,
+                'low_risk': low_risk_count,
+                'company_id': company.id,
+                'company_name': company.name
+            }
+        }
+        
+        logger.info(f"✅ Batch prediction completed successfully: {response_data}")
+        return jsonify(response_data)
+        
+    except Exception as e:
+        logger.error(f"❌ Batch prediction failed: {str(e)}")
+        logger.error(traceback.format_exc())
+        
+        return jsonify({
+            'success': False,
+            'error': f'Prediction processing failed: {str(e)}',
+            'message': 'Please check if customers exist in your database and the prediction service is running'
+        }), 500
+
 @dashboard_bp.route('/debug')
 @login_required
 def debug():
@@ -394,42 +560,6 @@ def analytics():
         return render_template('dashboard/analytics.html', 
                              company=None,
                              churn_data={})
-
-@dashboard_bp.route('/run-predictions', methods=['POST'])
-@login_required
-def run_predictions():
-    """Trigger churn predictions for all customers"""
-    try:
-        company = None
-        if hasattr(current_user, 'company_id') and current_user.company_id:
-            from app.models.company import Company
-            company = Company.query.get(current_user.company_id)
-            
-        if not company:
-            return jsonify({'error': 'No company found'}), 400
-        
-        # Get customers
-        from app.models.customer import Customer
-        customers = Customer.query.filter_by(company_id=company.id).all()
-        if not customers:
-            return jsonify({'error': 'No customers found'}), 400
-        
-        # Mock prediction response since ML service might not be implemented
-        return jsonify({
-            'success': True,
-            'message': f'Mock predictions generated for {len(customers)} customers',
-            'results': {
-                'total_processed': len(customers),
-                'customers_updated': 0,
-                'high_risk': max(1, int(len(customers) * 0.08)),
-                'medium_risk': max(1, int(len(customers) * 0.15)),
-                'low_risk': len(customers) - max(1, int(len(customers) * 0.23))
-            }
-        })
-        
-    except Exception as e:
-        logger.error(f"Error running predictions: {str(e)}")
-        return jsonify({'error': str(e)}), 500
 
 # Export the blueprint
 __all__ = ['dashboard_bp']
