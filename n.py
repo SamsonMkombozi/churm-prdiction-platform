@@ -1,144 +1,172 @@
 """
-Database Migration Script - Add predicted_at Column
-run_migration.py
+CRM API Debug Script
+debug_crm_api.py
 
-This script adds the missing predicted_at column to the predictions table
+Run this script to test your CRM API directly and see what's happening
 """
-import sqlite3
-import os
-from datetime import datetime
+import requests
+import json
 
-def migrate_predictions_table():
-    """Add predicted_at column to predictions table"""
+def test_crm_api(base_url, table_name='crm_customers'):
+    """Test CRM API and provide detailed debugging information"""
+    print(f"🔍 Testing CRM API: {base_url}")
+    print(f"📊 Table: {table_name}")
+    print("=" * 60)
     
-    # Database path (adjust if needed)
-    db_path = 'instance/churn_platform.db'
-    
-    if not os.path.exists(db_path):
-        print(f"❌ Database not found at {db_path}")
-        print("Please update the db_path variable to point to your database file")
-        return False
+    # Build URL
+    test_url = f"{base_url}?table={table_name}&limit=1"
+    print(f"🔗 Full URL: {test_url}")
+    print()
     
     try:
-        # Connect to database
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
+        print("🚀 Making request...")
+        response = requests.get(test_url, timeout=10)
         
-        # Check if predictions table exists
-        cursor.execute("""
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name='predictions'
-        """)
+        print(f"📊 Status Code: {response.status_code}")
+        print(f"📊 Response Headers:")
+        for key, value in response.headers.items():
+            print(f"   {key}: {value}")
+        print()
         
-        if not cursor.fetchone():
-            print("❌ Predictions table not found")
+        print(f"📊 Content Length: {len(response.content)} bytes")
+        print(f"📊 Content Type: {response.headers.get('content-type', 'Unknown')}")
+        print()
+        
+        # Check if response is empty
+        if len(response.content) == 0:
+            print("❌ PROBLEM: Empty response!")
+            print("   - Check if the API URL is correct")
+            print("   - Check if the server is running")
+            print("   - Check if the table name is correct")
             return False
         
-        # Check if predicted_at column already exists
-        cursor.execute("PRAGMA table_info(predictions)")
-        columns = [column[1] for column in cursor.fetchall()]
+        # Show response preview
+        response_text = response.text
+        print(f"📄 Response Preview (first 500 chars):")
+        print("-" * 40)
+        print(response_text[:500])
+        if len(response_text) > 500:
+            print("... (truncated)")
+        print("-" * 40)
+        print()
         
-        if 'predicted_at' in columns:
-            print("✅ predicted_at column already exists")
+        # Check if it looks like HTML
+        if response_text.strip().startswith('<!DOCTYPE') or response_text.strip().startswith('<html'):
+            print("❌ PROBLEM: Received HTML instead of JSON!")
+            print("   - This usually means the endpoint is wrong")
+            print("   - Or the server has an error")
+            print("   - Check the API documentation")
+            return False
+        
+        # Check if it looks like an error page
+        if 'error' in response_text.lower() and 'html' in response_text.lower():
+            print("❌ PROBLEM: Received HTML error page!")
+            print("   - Server might be returning an error")
+            print("   - Check the URL and table name")
+            return False
+        
+        # Try to parse JSON
+        try:
+            data = response.json()
+            print("✅ Successfully parsed JSON!")
+            print()
+            
+            # Analyze JSON structure
+            print(f"📊 JSON Type: {type(data)}")
+            
+            if isinstance(data, dict):
+                print(f"📊 Dictionary Keys: {list(data.keys())}")
+                
+                # Check for common error fields
+                if 'error' in data:
+                    print(f"❌ API Error: {data['error']}")
+                    return False
+                
+                # Check for data fields
+                data_fields = ['data', 'records', 'results', 'items']
+                found_data = None
+                for field in data_fields:
+                    if field in data:
+                        found_data = data[field]
+                        print(f"✅ Found data in '{field}' field")
+                        break
+                
+                if found_data is not None:
+                    if isinstance(found_data, list):
+                        print(f"📊 Record count: {len(found_data)}")
+                        if len(found_data) > 0:
+                            print(f"📊 First record keys: {list(found_data[0].keys()) if isinstance(found_data[0], dict) else 'Not a dict'}")
+                    else:
+                        print(f"📊 Data type: {type(found_data)}")
+                else:
+                    print("📊 No standard data field found, treating whole response as data")
+                    
+            elif isinstance(data, list):
+                print(f"📊 List length: {len(data)}")
+                if len(data) > 0:
+                    print(f"📊 First item type: {type(data[0])}")
+                    if isinstance(data[0], dict):
+                        print(f"📊 First item keys: {list(data[0].keys())}")
+            
+            print("✅ API test successful!")
             return True
+            
+        except json.JSONDecodeError as e:
+            print(f"❌ PROBLEM: JSON parsing failed!")
+            print(f"   Error: {str(e)}")
+            print("   - Response is not valid JSON")
+            print("   - Check if the API returns JSON format")
+            return False
         
-        print("🔄 Adding predicted_at column...")
-        
-        # Add the predicted_at column
-        cursor.execute("""
-            ALTER TABLE predictions 
-            ADD COLUMN predicted_at DATETIME
-        """)
-        
-        # Update existing records to use created_at as predicted_at
-        current_time = datetime.utcnow().isoformat()
-        cursor.execute("""
-            UPDATE predictions 
-            SET predicted_at = COALESCE(created_at, ?)
-            WHERE predicted_at IS NULL
-        """, (current_time,))
-        
-        # Count updated records
-        cursor.execute("SELECT COUNT(*) FROM predictions WHERE predicted_at IS NOT NULL")
-        updated_count = cursor.fetchone()[0]
-        
-        # Commit changes
-        conn.commit()
-        
-        print(f"✅ Migration completed successfully!")
-        print(f"   - Added predicted_at column")
-        print(f"   - Updated {updated_count} existing records")
-        
-        return True
-        
-    except Exception as e:
-        print(f"❌ Migration failed: {e}")
-        if 'conn' in locals():
-            conn.rollback()
+    except requests.exceptions.Timeout:
+        print("❌ PROBLEM: Request timeout!")
+        print("   - API server is not responding")
+        print("   - Try increasing timeout or check server status")
         return False
-        
-    finally:
-        if 'conn' in locals():
-            conn.close()
-
-def verify_migration():
-    """Verify that the migration was successful"""
-    db_path = '/instance/Churn_platform.db'
     
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        
-        # Check table structure
-        cursor.execute("PRAGMA table_info(predictions)")
-        columns = {column[1]: column[2] for column in cursor.fetchall()}
-        
-        print("\n📋 Current predictions table structure:")
-        for col_name, col_type in columns.items():
-            marker = "✅" if col_name == 'predicted_at' else "  "
-            print(f"{marker} {col_name}: {col_type}")
-        
-        # Check data
-        cursor.execute("""
-            SELECT COUNT(*) as total,
-                   COUNT(predicted_at) as with_predicted_at
-            FROM predictions
-        """)
-        
-        result = cursor.fetchone()
-        total_records = result[0]
-        records_with_predicted_at = result[1]
-        
-        print(f"\n📊 Data verification:")
-        print(f"   Total records: {total_records}")
-        print(f"   Records with predicted_at: {records_with_predicted_at}")
-        
-        if total_records > 0 and records_with_predicted_at == total_records:
-            print("✅ All records have predicted_at values")
-        elif total_records > 0:
-            print(f"⚠️  {total_records - records_with_predicted_at} records missing predicted_at")
-        
-        return True
-        
-    except Exception as e:
-        print(f"❌ Verification failed: {e}")
+    except requests.exceptions.ConnectionError:
+        print("❌ PROBLEM: Connection error!")
+        print("   - Cannot connect to the server")
+        print("   - Check if the URL is correct")
+        print("   - Check if the server is running")
         return False
+    
+    except Exception as e:
+        print(f"❌ PROBLEM: Unexpected error!")
+        print(f"   Error: {str(e)}")
+        return False
+
+
+def main():
+    """Main function to test multiple tables"""
+    # ✅ Replace with your actual CRM API URL
+    CRM_API_URL = "http://localhost/Web_CRM/api.php"  # UPDATE THIS!
+    
+    # Test different tables
+    tables_to_test = [
+        'crm_customers',
+        'nav_mpesa_transaction', 
+        'tickets_full',
+        'spl_statistics'
+    ]
+    
+    print("🧪 CRM API Debug Tool")
+    print("=" * 60)
+    print()
+    
+    for table in tables_to_test:
+        print(f"Testing table: {table}")
+        success = test_crm_api(CRM_API_URL, table)
+        print()
+        print("=" * 60)
+        print()
         
-    finally:
-        if 'conn' in locals():
-            conn.close()
+        if not success:
+            print(f"❌ Failed on table: {table}")
+            break
+    else:
+        print("✅ All tests passed!")
+
 
 if __name__ == "__main__":
-    print("🚀 Starting predictions table migration...")
-    
-    # Run migration
-    if migrate_predictions_table():
-        print("\n🔍 Verifying migration...")
-        verify_migration()
-    else:
-        print("\n❌ Migration failed - see errors above")
-    
-    print("\n📝 Next steps:")
-    print("1. Replace your app/models/prediction.py with the fixed version")
-    print("2. Restart your Flask application")
-    print("3. Test predictions again")
+    main()
