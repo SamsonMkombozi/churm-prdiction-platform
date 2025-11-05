@@ -20,7 +20,11 @@ import psycopg2
 import psycopg2.extras
 from datetime import datetime, timedelta
 from flask import current_app
-from app.models import Customer, Payment, Ticket, db
+# ✅ FIX: Import db from extensions, not models
+from app.extensions import db
+from app.models.customer import Customer
+from app.models.payment import Payment
+from app.models.ticket import Ticket
 from app.models.company import Company
 from app.extensions import db as database
 import traceback

@@ -57,7 +57,7 @@ def dashboard():
             else:
                 customer.tenure_months = 0
         
-        return render_template('crm/enhanced_dashboard.html',
+        return render_template('crm/dashboard.html',
                              company=company,
                              connection_info=connection_info,
                              stats=stats,
@@ -85,7 +85,7 @@ def dashboard():
             'sync_status': 'error'
         }
         
-        return render_template('crm/enhanced_dashboard.html',
+        return render_template('crm/dashboard.html',
                              company=company,
                              connection_info=connection_info,
                              stats=stats,
