@@ -1,8 +1,11 @@
 """
-Payment Repository - FINAL FIXED VERSION
+Payment Repository - ENHANCED VERSION with tx_amount and account_no
 app/repositories/payment_repository.py
 
-Uses 'account_no' field for customer reference
+✅ FIXES:
+1. Uses 'tx_amount' field for transaction amount
+2. Uses 'account_no' field for customer linking
+3. Better error handling
 """
 from datetime import datetime
 from typing import List, Optional, Dict
@@ -49,78 +52,152 @@ class PaymentRepository:
     def create(self, payment_data: Dict) -> Optional[Payment]:
         """
         Create new payment from dictionary
-        ✅ FIXED: Uses 'account_no' field for customer reference
+        ✅ ENHANCED: Uses 'tx_amount' and 'account_no' fields
+        
+        Sample data from your CRM:
+        {
+            "id": "123",
+            "tx_amount": "2500",
+            "account_no": "SHO000004481",
+            "phone_no": "254725815558",
+            "payer": "NOBERT GACHANJA SHAYO",
+            "created_at": "2021-10-18 06:10:32",
+            "transaction_time": "2021-10-18 09:10:30",
+            "mpesa_reference": "ABC123XYZ",
+            "posted_to_ledgers": 1,
+            "is_refund": 0
+        }
         """
-        # ✅ FIX: Use 'account_no' field (this is how your CRM stores customer ID)
-        customer_crm_id = (
+        # ✅ FIX 1: Get customer ID from 'account_no' field
+        customer_account_no = (
             payment_data.get('account_no') or      # Primary field in your CRM
-            payment_data.get('payer') or           # Backup field
-            payment_data.get('customer_id') or     # Standard fallback
-            payment_data.get('customerId')
+            payment_data.get('payer') or           # Backup: use payer name
+            payment_data.get('customer_id')        # Standard fallback
         )
         
         customer = None
-        if customer_crm_id:
-            # Convert to string for comparison
+        if customer_account_no:
+            # Try to find customer by CRM customer ID (which matches account_no)
             customer = Customer.query.filter_by(
                 company_id=self.company_id,
-                crm_customer_id=str(customer_crm_id)
+                crm_customer_id=str(customer_account_no)
             ).first()
             
             if not customer:
                 logger.warning(
                     f"Skipping payment {payment_data.get('id')} - "
-                    f"Customer {customer_crm_id} not found in database"
+                    f"Customer with account_no {customer_account_no} not found in database"
                 )
                 return None
         else:
             logger.warning(
                 f"Skipping payment {payment_data.get('id')} - "
-                f"No account_no provided"
+                f"No account_no or payer provided"
             )
             return None
         
-        # Parse payment date
+        # ✅ FIX 2: Use 'tx_amount' field for amount
+        # Parse amount from tx_amount field
+        try:
+            amount = float(payment_data.get('tx_amount', 0) or 
+                          payment_data.get('transaction_amount', 0) or 
+                          payment_data.get('amount', 0) or 0)
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid amount for payment {payment_data.get('id')}, using 0")
+            amount = 0.0
+        
+        # Parse payment date - try transaction_time first, then created_at
         payment_date = self._parse_date(
             payment_data.get('transaction_time') or 
             payment_data.get('created_at')
         ) or datetime.utcnow()
         
-        # Get amount
-        amount = float(payment_data.get('transaction_amount', 0) or 
-                      payment_data.get('amount', 0) or 0)
+        # Get MPESA reference or transaction ID
+        transaction_id = (
+            payment_data.get('mpesa_reference') or 
+            payment_data.get('transaction_id') or
+            payment_data.get('id')
+        )
+        
+        # Determine payment status
+        is_refund = payment_data.get('is_refund', 0)
+        posted_to_ledgers = payment_data.get('posted_to_ledgers', 0)
+        
+        if is_refund:
+            status = 'refunded'
+        elif posted_to_ledgers:
+            status = 'completed'
+        else:
+            status = payment_data.get('status', 'pending')
+        
+        # Get payer name
+        payer_name = payment_data.get('payer', '')
         
         # Create payment with valid customer_id
         payment = Payment(
             company_id=self.company_id,
             customer_id=customer.id,  # Now guaranteed to be valid
             crm_payment_id=str(payment_data.get('id')),
-            transaction_id=payment_data.get('mpesa_reference') or payment_data.get('transaction_id'),
+            transaction_id=str(transaction_id),
             amount=amount,
-            currency='TZS',  # Tanzanian Shilling for your CRM
-            payment_method=payment_data.get('transaction_type', 'mobile_money').lower(),
+            currency='TZS',  # Tanzanian Shilling
+            payment_method='mobile_money',  # MPESA is mobile money
             payment_date=payment_date,
-            status=payment_data.get('status') or 'completed',  # Default to completed if no status
-            description=f"MPESA {payment_data.get('mpesa_reference', '')}",
+            status=status,
+            description=f"MPESA payment from {payer_name}",
             reference_number=payment_data.get('mpesa_reference'),
             synced_at=datetime.utcnow()
         )
         
         db.session.add(payment)
+        logger.debug(f"✅ Created payment: Amount={amount}, Customer={customer_account_no}")
         return payment
     
     def update(self, payment: Payment, payment_data: Dict) -> Payment:
-        """Update existing payment"""
-        payment.transaction_id = payment_data.get('mpesa_reference') or payment.transaction_id
-        payment.amount = float(payment_data.get('transaction_amount', payment.amount))
-        payment.payment_method = payment_data.get('transaction_type', payment.payment_method).lower()
-        payment.status = payment_data.get('status') or payment.status
+        """
+        Update existing payment
+        ✅ ENHANCED: Uses tx_amount and properly updates fields
+        """
+        # Update transaction ID
+        if 'mpesa_reference' in payment_data:
+            payment.transaction_id = str(payment_data.get('mpesa_reference') or payment.transaction_id)
         
+        # ✅ Update amount from tx_amount
+        if 'tx_amount' in payment_data or 'transaction_amount' in payment_data:
+            try:
+                new_amount = float(payment_data.get('tx_amount') or 
+                                  payment_data.get('transaction_amount', payment.amount))
+                payment.amount = new_amount
+            except (ValueError, TypeError):
+                pass  # Keep existing amount if parse fails
+        
+        # Update status based on flags
+        if 'is_refund' in payment_data or 'posted_to_ledgers' in payment_data:
+            is_refund = payment_data.get('is_refund', 0)
+            posted_to_ledgers = payment_data.get('posted_to_ledgers', 0)
+            
+            if is_refund:
+                payment.status = 'refunded'
+            elif posted_to_ledgers:
+                payment.status = 'completed'
+            elif 'status' in payment_data:
+                payment.status = payment_data.get('status')
+        
+        # Update payment date if provided
         if 'transaction_time' in payment_data:
-            payment.payment_date = self._parse_date(payment_data['transaction_time']) or payment.payment_date
+            new_date = self._parse_date(payment_data['transaction_time'])
+            if new_date:
+                payment.payment_date = new_date
+        
+        # Update description if payer changed
+        if 'payer' in payment_data:
+            payer_name = payment_data.get('payer', '')
+            payment.description = f"MPESA payment from {payer_name}"
         
         payment.updated_at = datetime.utcnow()
         payment.synced_at = datetime.utcnow()
+        
+        logger.debug(f"✅ Updated payment {payment.id}")
         return payment
     
     def create_or_update(self, payment_data: Dict) -> Optional[bool]:
@@ -142,56 +219,6 @@ class PaymentRepository:
         else:
             created_payment = self.create(payment_data)
             return True if created_payment else None
-        
-    def create_or_update_payment(self, payment_data):
-        """Create/update payment with customer validation"""
-        customer_id = payment_data.get('customer_id')
-        
-        # Verify customer exists
-        customer = Customer.query.filter_by(crm_id=customer_id).first()
-        if not customer:
-            logger.warning(f"Skipping payment {payment_data.get('id')} - Customer {customer_id} not found")
-            
-            # Option A: Skip this payment
-            # return None
-            
-            # Option B: Create placeholder customer (use with caution)
-            customer = self._create_placeholder_customer(customer_id)
-        
-        # Continue with payment creation...
-        payment = Payment.query.filter_by(crm_id=payment_data['id']).first()
-        
-        if not payment:
-            payment = Payment(
-                crm_id=payment_data['id'],
-                customer_id=customer.id,  # Use internal ID, not CRM ID
-                # ... other fields
-            )
-            db.session.add(payment)
-        else:
-            # Update existing payment
-            payment.amount = payment_data.get('amount')
-            # ... other updates
-        
-        db.session.commit()
-        return payment
-    
-    def ensure_customer_exists(self, crm_customer_id):
-        """Ensure customer exists, create placeholder if missing"""
-        customer = Customer.query.filter_by(crm_customer_id=crm_customer_id).first()
-        
-        if not customer:
-            logger.warning(f"Customer {crm_customer_id} missing, creating placeholder")
-            customer = Customer(
-                crm_customer_id=crm_customer_id,
-                name=f"Unknown Customer {crm_customer_id}",
-                email=f"unknown_{crm_customer_id}@placeholder.com",
-                status='active'
-            )
-            db.session.add(customer)
-            db.session.flush()  # Get ID without committing
-            
-        return customer
     
     def delete(self, payment: Payment):
         db.session.delete(payment)
@@ -230,13 +257,26 @@ class PaymentRepository:
     
     @staticmethod
     def _parse_date(date_string: str) -> Optional[datetime]:
+        """Parse date string to datetime"""
         if not date_string:
             return None
-        try:
-            return datetime.fromisoformat(date_string.replace('Z', '+00:00'))
-        except (ValueError, AttributeError):
+        
+        # Remove any extra whitespace
+        date_string = str(date_string).strip()
+        
+        # Try various formats
+        formats = [
+            '%Y-%m-%d %H:%M:%S',  # "2021-10-18 09:10:30"
+            '%Y-%m-%d',            # "2021-10-18"
+            '%Y-%m-%dT%H:%M:%S',   # ISO format
+            '%Y-%m-%dT%H:%M:%SZ'   # ISO format with Z
+        ]
+        
+        for fmt in formats:
             try:
-                # Handle format like "2025-09-10 19:25:05"
-                return datetime.strptime(date_string, '%Y-%m-%d %H:%M:%S')
-            except:
-                return None
+                return datetime.strptime(date_string, fmt)
+            except (ValueError, AttributeError):
+                continue
+        
+        logger.warning(f"Could not parse date: {date_string}")
+        return None

@@ -9,21 +9,24 @@
             <i class="fas fa-sync-alt me-2"></i>CRM Dashboard
         </h1>
         <div class="btn-toolbar mb-2 mb-md-0">
-        {% if current_user.is_manager() %}
-        <button type="button" class="btn btn-primary me-2" id="syncButton">
-            <i class="fas fa-sync-alt me-2"></i>Sync CRM Data
-        </button>
-        <!-- ✅ NEW: Reset button for stuck syncs -->
-        {% if company.sync_status == 'in_progress' %}
-        <button type="button" class="btn btn-warning me-2" id="resetSyncButton">
-            <i class="fas fa-redo me-2"></i>Reset Sync
-        </button>
-        {% endif %}
-        {% endif %}
-        <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline-secondary">
-            <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
-        </a>
-    </div>
+            {% if current_user.is_manager() %}
+            <!-- ✅ NEW: Selective Sync Button -->
+            <button type="button" class="btn btn-primary me-2" id="syncButton" 
+                    data-bs-toggle="modal" data-bs-target="#syncModal">
+                <i class="fas fa-sync-alt me-2"></i>Sync CRM Data
+            </button>
+            
+            {% if company.sync_status == 'in_progress' %}
+            <button type="button" class="btn btn-warning me-2" id="resetSyncButton">
+                <i class="fas fa-redo me-2"></i>Reset Sync
+            </button>
+            {% endif %}
+            {% endif %}
+            
+            <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+            </a>
+        </div>
     </div>
 
     <!-- Sync Status Alert -->
@@ -34,7 +37,7 @@
             </div>
             <div>
                 <strong>Syncing CRM data...</strong>
-                <p class="mb-0 small">This may take a few moments. Please wait.</p>
+                <p class="mb-0 small" id="syncMessage">Please wait while we sync your data.</p>
             </div>
         </div>
     </div>
@@ -111,7 +114,7 @@
                                 Total Revenue
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                KSH {{ "{:,.0f}".format(stats.total_revenue) }}
+                                TZS {{ "{:,.0f}".format(stats.total_revenue) }}
                             </div>
                             <small class="text-muted">{{ stats.payments|number }} payments</small>
                         </div>
@@ -209,9 +212,7 @@
                             <tbody>
                                 {% for customer in recent_customers %}
                                 <tr>
-                                    <td>
-                                        <strong>{{ customer.customer_name }}</strong>
-                                    </td>
+                                    <td><strong>{{ customer.customer_name }}</strong></td>
                                     <td>{{ customer.email or 'N/A' }}</td>
                                     <td>
                                         <span class="badge bg-{{ 'success' if customer.status == 'active' else 'secondary' }}">
@@ -219,7 +220,7 @@
                                         </span>
                                     </td>
                                     <td>{{ customer.tenure_months }} months</td>
-                                    <td>KSH {{ "{:,.0f}".format(customer.monthly_charges) }}</td>
+                                    <td>TZS {{ "{:,.0f}".format(customer.monthly_charges) }}</td>
                                     <td>{{ customer.created_at|datetime }}</td>
                                 </tr>
                                 {% endfor %}
@@ -279,30 +280,113 @@
         </div>
     </div>
 </div>
+
+<!-- ✅ NEW: Selective Sync Modal -->
+<div class="modal fade" id="syncModal" tabindex="-1" aria-labelledby="syncModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="syncModalLabel">
+                    <i class="fas fa-sync-alt me-2"></i>Selective CRM Sync
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Choose which data types to sync from your CRM:</p>
+                
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="syncCustomers" checked>
+                    <label class="form-check-label" for="syncCustomers">
+                        <strong><i class="fas fa-users me-2 text-primary"></i>Customers</strong>
+                        <br><small class="text-muted">Sync customer information and profiles</small>
+                    </label>
+                </div>
+                
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="syncPayments" checked>
+                    <label class="form-check-label" for="syncPayments">
+                        <strong><i class="fas fa-money-bill-wave me-2 text-success"></i>Payments</strong>
+                        <br><small class="text-muted">Sync payment transactions and revenue data</small>
+                    </label>
+                </div>
+                
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="syncTickets" checked>
+                    <label class="form-check-label" for="syncTickets">
+                        <strong><i class="fas fa-ticket-alt me-2 text-info"></i>Support Tickets</strong>
+                        <br><small class="text-muted">Sync customer support tickets and issues</small>
+                    </label>
+                </div>
+                
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="syncUsage">
+                    <label class="form-check-label" for="syncUsage">
+                        <strong><i class="fas fa-chart-line me-2 text-warning"></i>Usage Statistics</strong>
+                        <br><small class="text-muted">Sync customer usage data and patterns</small>
+                    </label>
+                </div>
+                
+                <div class="alert alert-info mt-3">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <small><strong>Smart Sync:</strong> Only new or changed data will be synced to save time.</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="startSyncButton">
+                    <i class="fas fa-sync-alt me-2"></i>Start Sync
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const syncButton = document.getElementById('syncButton');
+    const syncModal = new bootstrap.Modal(document.getElementById('syncModal'));
+    const startSyncButton = document.getElementById('startSyncButton');
     const syncAlert = document.getElementById('syncAlert');
+    const syncMessage = document.getElementById('syncMessage');
+    const resetSyncButton = document.getElementById('resetSyncButton');
     
-    if (syncButton) {
-        syncButton.addEventListener('click', function() {
-            // Disable button
-            syncButton.disabled = true;
-            syncButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Syncing...';
+    // ✅ NEW: Start selective sync
+    if (startSyncButton) {
+        startSyncButton.addEventListener('click', function() {
+            // Get selected sync options
+            const syncOptions = {
+                sync_customers: document.getElementById('syncCustomers').checked,
+                sync_payments: document.getElementById('syncPayments').checked,
+                sync_tickets: document.getElementById('syncTickets').checked,
+                sync_usage: document.getElementById('syncUsage').checked
+            };
             
-            // Show alert
+            // Check if at least one option is selected
+            if (!Object.values(syncOptions).some(v => v)) {
+                alert('Please select at least one data type to sync.');
+                return;
+            }
+            
+            // Close modal
+            syncModal.hide();
+            
+            // Show sync alert
             syncAlert.style.display = 'block';
             syncAlert.classList.add('show');
+            syncMessage.textContent = 'Syncing selected data types...';
+            
+            // Disable button
+            startSyncButton.disabled = true;
+            startSyncButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Syncing...';
             
             // Make AJAX request
             fetch('{{ url_for("crm.sync") }}', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                }
+                },
+                body: JSON.stringify(syncOptions)
             })
             .then(response => response.json())
             .then(data => {
@@ -341,8 +425,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     );
                     
                     // Re-enable button
-                    syncButton.disabled = false;
-                    syncButton.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Sync CRM Data';
+                    startSyncButton.disabled = false;
+                    startSyncButton.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Start Sync';
                 }
             })
             .catch(error => {
@@ -354,32 +438,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert('Error: ' + error.message);
                 
                 // Re-enable button
-                syncButton.disabled = false;
-                syncButton.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Sync CRM Data';
+                startSyncButton.disabled = false;
+                startSyncButton.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Start Sync';
             });
         });
     }
-});
-</script>
-
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const syncButton = document.getElementById('syncButton');
-    const resetSyncButton = document.getElementById('resetSyncButton');
-    const syncAlert = document.getElementById('syncAlert');
     
-    // Existing sync button handler
-    if (syncButton) {
-        syncButton.addEventListener('click', function() {
-            // ... existing sync code ...
-        });
-    }
-    
-    // ✅ NEW: Reset sync button handler
+    // Reset sync button handler
     if (resetSyncButton) {
         resetSyncButton.addEventListener('click', function() {
-            if (confirm('Are you sure you want to reset the sync status? This should only be done if a sync is stuck.')) {
+            if (confirm('Are you sure you want to reset the sync status?')) {
                 resetSyncButton.disabled = true;
                 resetSyncButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Resetting...';
                 

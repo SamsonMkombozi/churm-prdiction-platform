@@ -1,14 +1,12 @@
 """
-Enhanced CRM Service - Fixes HTTP 500 Errors and Timeouts
+Enhanced CRM Service with Robust JSON Error Handling
 app/services/crm_service.py
 
-✅ SOLUTIONS FOR YOUR ISSUES:
-1. HTTP 500 errors - Better error handling and retry logic
-2. Timeouts - Increased timeouts and batch processing
-3. Large datasets - Progressive loading with limits
-4. Connection issues - Robust retry mechanism
-
-Replace your existing CRM service with this enhanced version.
+✅ FIXES:
+- Better JSON parsing with multiple fallback strategies
+- Handles malformed JSON responses
+- Graceful degradation on parse errors
+- Detailed error logging
 """
 import requests
 from datetime import datetime
@@ -23,14 +21,15 @@ from app.models.company import Company
 from app.repositories.customer_repository import CustomerRepository
 from app.repositories.payment_repository import PaymentRepository
 from app.repositories.ticket_repository import TicketRepository
+from app.repositories.usage_repository import UsageRepository
 
 logger = logging.getLogger(__name__)
 
 
 class CRMService:
-    """Enhanced CRM service with robust error handling"""
+    """Enhanced CRM service with selective sync capabilities"""
     
-    # ✅ Table names for your CRM
+    # Table names for your CRM
     CUSTOMER_TABLE = 'crm_customers'
     TICKET_TABLE = 'tickets_full'
     PAYMENT_TABLE = 'nav_mpesa_transactions'
@@ -44,26 +43,23 @@ class CRMService:
         if not self.api_url:
             raise ValueError("CRM API URL not configured")
         
-        # ✅ Enhanced connection settings
-        self.timeout = 120  # Increased timeout for large datasets
+        # Connection settings
+        self.timeout = 120
         self.max_retries = 3
-        self.retry_delay = 2  # seconds between retries
-        self.batch_size = 50  # Smaller batches to prevent timeouts
-        self.max_records_per_request = 500  # Limit records per API call
+        self.retry_delay = 2
+        self.batch_size = 50
+        self.max_records_per_request = 500
         
         # Initialize repositories
         self.customer_repo = CustomerRepository(company)
         self.payment_repo = PaymentRepository(company)
         self.ticket_repo = TicketRepository(company)
+        self.usage_repo = UsageRepository(company)
         
         logger.info(f"🔧 CRM Service initialized for {company.name}")
-        logger.info(f"🌐 API URL: {self.api_url}")
-        logger.info(f"⏱️ Timeout: {self.timeout}s, Batch size: {self.batch_size}")
     
     def test_connection(self) -> Dict:
-        """
-        ✅ ENHANCED: Test CRM connection with detailed diagnostics
-        """
+        """Test CRM connection with detailed diagnostics"""
         logger.info("🔍 Testing CRM connection...")
         
         result = {
@@ -75,7 +71,6 @@ class CRMService:
         }
         
         try:
-            # Test each table with small limit
             test_tables = [
                 (self.CUSTOMER_TABLE, 'customers'),
                 (self.PAYMENT_TABLE, 'payments'),
@@ -87,7 +82,6 @@ class CRMService:
                 logger.info(f"🧪 Testing {friendly_name} table: {table_name}")
                 
                 try:
-                    # Test with very small limit
                     test_data = self._fetch_data_batch(table_name, limit=1, offset=0)
                     
                     table_result = {
@@ -97,7 +91,7 @@ class CRMService:
                         'error': None
                     }
                     
-                    logger.info(f"✅ {friendly_name}: {table_result['record_count']} records, keys: {table_result['sample_keys'][:5]}")
+                    logger.info(f"✅ {friendly_name}: {table_result['record_count']} records")
                     
                 except Exception as e:
                     table_result = {
@@ -111,7 +105,6 @@ class CRMService:
                 result['debug_info'][table_name] = table_result
                 result['tables_tested'].append(friendly_name)
             
-            # Check if at least one table is accessible
             accessible_tables = [
                 table for table, info in result['debug_info'].items() 
                 if info['accessible']
@@ -120,24 +113,19 @@ class CRMService:
             if accessible_tables:
                 result['success'] = True
                 result['message'] = f"✅ Connection successful! Accessible tables: {', '.join(accessible_tables)}"
-                logger.info(f"✅ CRM connection test successful")
             else:
                 result['success'] = False
                 result['message'] = "❌ No tables are accessible. Check your CRM API configuration."
-                logger.error("❌ CRM connection test failed - no accessible tables")
         
         except Exception as e:
             result['success'] = False
             result['message'] = f"❌ Connection test failed: {str(e)}"
             result['debug_info']['connection_error'] = str(e)
-            logger.error(f"❌ CRM connection test failed: {str(e)}")
         
         return result
     
     def _make_request(self, url: str, params: Dict = None) -> requests.Response:
-        """
-        ✅ ENHANCED: Make HTTP request with retry logic and better error handling
-        """
+        """Make HTTP request with retry logic"""
         if params is None:
             params = {}
         
@@ -146,7 +134,6 @@ class CRMService:
         for attempt in range(self.max_retries):
             try:
                 logger.debug(f"🌐 Request attempt {attempt + 1}/{self.max_retries}: {url}")
-                logger.debug(f"📋 Params: {params}")
                 
                 response = requests.get(
                     url, 
@@ -159,19 +146,8 @@ class CRMService:
                     }
                 )
                 
-                logger.debug(f"📊 Response: {response.status_code}, Content-Type: {response.headers.get('content-type')}")
-                
-                # ✅ Handle specific HTTP errors
-                if response.status_code == 500:
-                    logger.warning(f"⚠️ HTTP 500 error (attempt {attempt + 1}). Server error.")
-                    if attempt < self.max_retries - 1:
-                        time.sleep(self.retry_delay * (attempt + 1))  # Exponential backoff
-                        continue
-                    else:
-                        response.raise_for_status()
-                
-                elif response.status_code == 504:
-                    logger.warning(f"⚠️ HTTP 504 timeout (attempt {attempt + 1}). Gateway timeout.")
+                if response.status_code in [500, 504]:
+                    logger.warning(f"⚠️ HTTP {response.status_code} error (attempt {attempt + 1})")
                     if attempt < self.max_retries - 1:
                         time.sleep(self.retry_delay * (attempt + 1))
                         continue
@@ -182,7 +158,6 @@ class CRMService:
                     logger.error(f"❌ HTTP {response.status_code}: {response.text[:200]}")
                     response.raise_for_status()
                 
-                # Success
                 return response
                 
             except requests.exceptions.Timeout as e:
@@ -194,19 +169,18 @@ class CRMService:
                     
             except requests.exceptions.ConnectionError as e:
                 last_exception = e
-                logger.warning(f"🔌 Connection error (attempt {attempt + 1}/{self.max_retries}): {str(e)}")
+                logger.warning(f"🔌 Connection error (attempt {attempt + 1}/{self.max_retries})")
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay * (attempt + 1))
                     continue
                     
             except requests.exceptions.RequestException as e:
                 last_exception = e
-                logger.error(f"❌ Request failed (attempt {attempt + 1}/{self.max_retries}): {str(e)}")
+                logger.error(f"❌ Request failed (attempt {attempt + 1}/{self.max_retries})")
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay)
                     continue
         
-        # If we get here, all retries failed
         if last_exception:
             raise last_exception
         else:
@@ -214,7 +188,7 @@ class CRMService:
     
     def _clean_json_response(self, response_text: str) -> str:
         """
-        ✅ ENHANCED: Clean response text to extract valid JSON
+        ✅ ENHANCED: Clean response text to extract valid JSON with better error handling
         """
         if not response_text:
             return '[]'
@@ -222,9 +196,26 @@ class CRMService:
         # Remove BOM and whitespace
         cleaned = response_text.strip().lstrip('\ufeff')
         
+        # If response is very short and looks broken, return empty array
+        if len(cleaned) < 3:
+            logger.warning(f"⚠️ Response too short: '{cleaned}' - returning empty array")
+            return '[]'
+        
+        # Check for common broken JSON patterns
+        if cleaned in ['{}', '{', '}', '[', ']', '[]']:
+            logger.warning(f"⚠️ Incomplete JSON: '{cleaned}' - returning empty array")
+            return '[]'
+        
         # If it starts with JSON, it's probably clean
         if cleaned.startswith('{') or cleaned.startswith('['):
-            return cleaned
+            # Quick validation check
+            try:
+                json.loads(cleaned)
+                return cleaned
+            except json.JSONDecodeError as e:
+                logger.warning(f"⚠️ JSON validation failed: {e} - attempting cleanup")
+                # Try to fix common issues
+                return self._attempt_json_repair(cleaned)
         
         # Try to extract JSON from HTML or mixed content
         json_patterns = [
@@ -235,14 +226,55 @@ class CRMService:
         for pattern in json_patterns:
             match = re.search(pattern, cleaned, re.DOTALL)
             if match:
-                return match.group(1)
+                extracted = match.group(1)
+                # Validate extracted JSON
+                try:
+                    json.loads(extracted)
+                    return extracted
+                except json.JSONDecodeError:
+                    continue
         
-        logger.warning(f"⚠️ Could not extract JSON from response: {cleaned[:200]}...")
+        logger.warning(f"⚠️ Could not extract valid JSON - returning empty array")
         return '[]'
+    
+    def _attempt_json_repair(self, broken_json: str) -> str:
+        """
+        ✅ NEW: Attempt to repair broken JSON
+        """
+        try:
+            # Common fixes
+            repaired = broken_json
+            
+            # Fix trailing commas in arrays
+            repaired = re.sub(r',\s*]', ']', repaired)
+            
+            # Fix trailing commas in objects
+            repaired = re.sub(r',\s*}', '}', repaired)
+            
+            # Fix missing closing brackets
+            open_brackets = repaired.count('[')
+            close_brackets = repaired.count(']')
+            if open_brackets > close_brackets:
+                repaired += ']' * (open_brackets - close_brackets)
+            
+            # Fix missing closing braces
+            open_braces = repaired.count('{')
+            close_braces = repaired.count('}')
+            if open_braces > close_braces:
+                repaired += '}' * (open_braces - close_braces)
+            
+            # Validate repair
+            json.loads(repaired)
+            logger.info("✅ Successfully repaired JSON")
+            return repaired
+            
+        except Exception as e:
+            logger.warning(f"⚠️ JSON repair failed: {e}")
+            return '[]'
     
     def _fetch_data_batch(self, table: str, limit: int = None, offset: int = 0) -> List[Dict]:
         """
-        ✅ NEW: Fetch data in batches to handle large datasets
+        ✅ ENHANCED: Fetch data in batches with robust error handling
         """
         try:
             params = {'table': table}
@@ -253,18 +285,27 @@ class CRMService:
             if offset:
                 params['offset'] = offset
             
-            logger.debug(f"📥 Fetching {table} batch: limit={limit}, offset={offset}")
-            
             response = self._make_request(self.api_url, params)
             
-            # Clean and parse JSON
+            # ✅ ENHANCED: Better response validation
+            if not response.text or len(response.text.strip()) == 0:
+                logger.warning(f"⚠️ Empty response for {table} at offset {offset}")
+                return []
+            
             cleaned_content = self._clean_json_response(response.text)
+            
+            # Additional validation before parsing
+            if cleaned_content == '[]':
+                logger.debug(f"Empty result set for {table} at offset {offset}")
+                return []
             
             try:
                 data = json.loads(cleaned_content)
             except json.JSONDecodeError as e:
                 logger.error(f"❌ JSON decode error for {table}: {str(e)}")
-                logger.error(f"Raw response: {response.text[:500]}")
+                logger.error(f"Response preview: {response.text[:500]}")
+                logger.error(f"Cleaned preview: {cleaned_content[:500]}")
+                # Return empty array instead of failing
                 return []
             
             # Handle different response formats
@@ -274,39 +315,61 @@ class CRMService:
                 elif 'records' in data:
                     records = data['records']
                 else:
-                    records = [data]  # Single record as dict
+                    records = [data]
             elif isinstance(data, list):
                 records = data
             else:
                 logger.warning(f"⚠️ Unexpected data format for {table}: {type(data)}")
                 return []
             
-            logger.debug(f"✅ Fetched {len(records)} records from {table}")
-            return records if isinstance(records, list) else []
+            # Validate records is actually a list
+            if not isinstance(records, list):
+                logger.warning(f"⚠️ Records is not a list for {table}: {type(records)}")
+                return []
+            
+            return records
             
         except Exception as e:
-            logger.error(f"❌ Failed to fetch {table} batch: {str(e)}")
+            logger.error(f"❌ Failed to fetch {table} batch at offset {offset}: {str(e)}")
+            # Return empty array instead of raising exception
             return []
     
-    def _fetch_data_progressive(self, table: str) -> List[Dict]:
+    def _fetch_data_progressive(self, table: str, max_errors: int = 3) -> List[Dict]:
         """
-        ✅ NEW: Progressively fetch all data to handle large datasets
+        ✅ ENHANCED: Progressively fetch all data with error tolerance
         """
         logger.info(f"📥 Starting progressive fetch for {table}")
         
         all_records = []
         offset = 0
         batch_size = self.batch_size
+        consecutive_errors = 0
+        consecutive_empty = 0
         
         while True:
-            logger.info(f"📦 Fetching {table} batch: offset={offset}, batch_size={batch_size}")
+            logger.info(f"📦 Fetching {table} batch: offset={offset}")
             
             try:
                 batch = self._fetch_data_batch(table, limit=batch_size, offset=offset)
                 
                 if not batch:
-                    logger.info(f"✅ No more records for {table}, stopping at offset {offset}")
-                    break
+                    consecutive_empty += 1
+                    logger.info(f"⚠️ Empty batch for {table} at offset {offset} (consecutive: {consecutive_empty})")
+                    
+                    # If we get 2 consecutive empty batches, we're probably at the end
+                    if consecutive_empty >= 2:
+                        logger.info(f"✅ Reached end of {table} data (consecutive empty batches)")
+                        break
+                    
+                    # Move to next batch anyway
+                    offset += batch_size
+                    continue
+                
+                # Reset consecutive empty counter
+                consecutive_empty = 0
+                
+                # Reset consecutive error counter on success
+                consecutive_errors = 0
                 
                 all_records.extend(batch)
                 offset += len(batch)
@@ -318,236 +381,98 @@ class CRMService:
                     logger.info(f"✅ Reached end of {table} data (partial batch)")
                     break
                 
-                # Small delay between batches to be gentle on the API
+                # Small delay between batches
                 time.sleep(0.5)
                 
             except Exception as e:
-                logger.error(f"❌ Error fetching {table} batch at offset {offset}: {str(e)}")
-                break
+                consecutive_errors += 1
+                logger.error(f"❌ Error fetching {table} batch at offset {offset} (error {consecutive_errors}/{max_errors}): {str(e)}")
+                
+                # If we hit max consecutive errors, stop
+                if consecutive_errors >= max_errors:
+                    logger.error(f"❌ Max consecutive errors reached for {table}, stopping fetch")
+                    break
+                
+                # Try next batch
+                offset += batch_size
+                time.sleep(1)  # Longer delay after error
+                continue
         
         logger.info(f"✅ Progressive fetch complete for {table}: {len(all_records)} total records")
         return all_records
     
-    def _sync_customers(self) -> Dict:
-        """✅ ENHANCED: Sync customers with batch processing"""
-        logger.info("👥 Starting customer sync...")
+    def _has_data_changed(self, data_type: str, new_data: List[Dict]) -> bool:
+        """Check if data has changed since last sync"""
+        if not new_data:
+            logger.info(f"📝 No data for {data_type}, skipping")
+            return False
         
-        result = {'new': 0, 'updated': 0, 'skipped': 0, 'errors': []}
+        # Get last sync timestamp
+        last_sync = self.company.last_sync_at
         
-        try:
-            # Update company sync status
-            self.company.sync_status = 'in_progress'
-            db.session.commit()
-            
-            # Fetch customers progressively
-            customers_data = self._fetch_data_progressive(self.CUSTOMER_TABLE)
-            
-            if not customers_data:
-                logger.warning("⚠️ No customer data received from CRM")
-                return result
-            
-            logger.info(f"📊 Processing {len(customers_data)} customers...")
-            
-            # Process customers in batches
-            for i in range(0, len(customers_data), self.batch_size):
-                batch = customers_data[i:i + self.batch_size]
-                logger.info(f"📦 Processing customer batch {i//self.batch_size + 1}: records {i+1}-{i+len(batch)}")
-                
-                batch_results = self._process_customer_batch(batch)
-                
-                # Aggregate results
-                result['new'] += batch_results['new']
-                result['updated'] += batch_results['updated']
-                result['skipped'] += batch_results['skipped']
-                result['errors'].extend(batch_results['errors'])
-                
-                # Commit batch
-                try:
-                    db.session.commit()
-                    logger.debug(f"✅ Committed customer batch {i//self.batch_size + 1}")
-                except Exception as e:
-                    logger.error(f"❌ Failed to commit customer batch: {str(e)}")
-                    db.session.rollback()
-                    result['errors'].append(f"Batch commit error: {str(e)}")
-            
-            logger.info(f"✅ Customer sync complete: {result['new']} new, {result['updated']} updated, {result['skipped']} skipped")
-            
-        except Exception as e:
-            logger.error(f"❌ Customer sync failed: {str(e)}")
-            db.session.rollback()
-            result['errors'].append(f"Customer sync error: {str(e)}")
-            raise
+        if not last_sync:
+            logger.info(f"📝 First sync for {data_type}, syncing all data")
+            return True
         
-        return result
+        # Check if any record is newer than last sync
+        date_fields = {
+            'customers': ['created_at', 'updated_at'],
+            'payments': ['created_at', 'transaction_time'],
+            'tickets': ['created_at', 'updated_at'],
+            'usage': ['created_at', 'start_date']
+        }
+        
+        check_fields = date_fields.get(data_type, ['created_at'])
+        changed_records = 0
+        
+        for record in new_data:
+            for field in check_fields:
+                if field in record and record[field]:
+                    try:
+                        record_date = self._parse_datetime(record[field])
+                        if record_date and record_date > last_sync:
+                            changed_records += 1
+                            break
+                    except:
+                        continue
+        
+        logger.info(f"📊 {data_type}: {changed_records}/{len(new_data)} records changed since last sync")
+        return changed_records > 0
     
-    def _process_customer_batch(self, customers: List[Dict]) -> Dict:
-        """Process a batch of customers"""
-        result = {'new': 0, 'updated': 0, 'skipped': 0, 'errors': []}
+    def _parse_datetime(self, date_string: str) -> Optional[datetime]:
+        """Parse datetime string"""
+        if not date_string:
+            return None
         
-        for customer_data in customers:
+        formats = [
+            '%Y-%m-%d %H:%M:%S',
+            '%Y-%m-%d',
+            '%Y-%m-%dT%H:%M:%S',
+            '%Y-%m-%dT%H:%M:%SZ'
+        ]
+        
+        for fmt in formats:
             try:
-                was_created = self.customer_repo.create_or_update(customer_data)
-                
-                if was_created is True:
-                    result['new'] += 1
-                elif was_created is False:
-                    result['updated'] += 1
-                else:  # None = skipped
-                    result['skipped'] += 1
-                    
-            except Exception as e:
-                error_msg = f"Customer {customer_data.get('id', 'unknown')}: {str(e)}"
-                logger.debug(f"⚠️ {error_msg}")
-                result['errors'].append(error_msg)
-                result['skipped'] += 1
+                return datetime.strptime(str(date_string), fmt)
+            except:
+                continue
         
-        return result
+        return None
     
-    def _sync_payments(self) -> Dict:
-        """✅ ENHANCED: Sync payments with batch processing"""
-        logger.info("💰 Starting payment sync...")
-        
-        result = {'new': 0, 'updated': 0, 'skipped': 0, 'errors': []}
-        
-        try:
-            payments_data = self._fetch_data_progressive(self.PAYMENT_TABLE)
-            
-            if not payments_data:
-                logger.warning("⚠️ No payment data received from CRM")
-                return result
-            
-            logger.info(f"📊 Processing {len(payments_data)} payments...")
-            
-            # Process payments in batches
-            for i in range(0, len(payments_data), self.batch_size):
-                batch = payments_data[i:i + self.batch_size]
-                logger.info(f"📦 Processing payment batch {i//self.batch_size + 1}: records {i+1}-{i+len(batch)}")
-                
-                batch_results = self._process_payment_batch(batch)
-                
-                # Aggregate results
-                result['new'] += batch_results['new']
-                result['updated'] += batch_results['updated']
-                result['skipped'] += batch_results['skipped']
-                result['errors'].extend(batch_results['errors'])
-                
-                # Commit batch
-                try:
-                    db.session.commit()
-                    logger.debug(f"✅ Committed payment batch {i//self.batch_size + 1}")
-                except Exception as e:
-                    logger.error(f"❌ Failed to commit payment batch: {str(e)}")
-                    db.session.rollback()
-                    result['errors'].append(f"Payment batch commit error: {str(e)}")
-            
-            logger.info(f"✅ Payment sync complete: {result['new']} new, {result['updated']} updated, {result['skipped']} skipped")
-            
-        except Exception as e:
-            logger.error(f"❌ Payment sync failed: {str(e)}")
-            db.session.rollback()
-            result['errors'].append(f"Payment sync error: {str(e)}")
-            raise
-        
-        return result
-    
-    def _process_payment_batch(self, payments: List[Dict]) -> Dict:
-        """Process a batch of payments"""
-        result = {'new': 0, 'updated': 0, 'skipped': 0, 'errors': []}
-        
-        for payment_data in payments:
-            try:
-                was_created = self.payment_repo.create_or_update(payment_data)
-                
-                if was_created is True:
-                    result['new'] += 1
-                elif was_created is False:
-                    result['updated'] += 1
-                else:  # None = skipped
-                    result['skipped'] += 1
-                    
-            except Exception as e:
-                error_msg = f"Payment {payment_data.get('id', 'unknown')}: {str(e)}"
-                logger.debug(f"⚠️ {error_msg}")
-                result['errors'].append(error_msg)
-                result['skipped'] += 1
-        
-        return result
-    
-    def _sync_tickets(self) -> Dict:
-        """✅ ENHANCED: Sync tickets with batch processing"""
-        logger.info("🎫 Starting ticket sync...")
-        
-        result = {'new': 0, 'updated': 0, 'skipped': 0, 'errors': []}
-        
-        try:
-            tickets_data = self._fetch_data_progressive(self.TICKET_TABLE)
-            
-            if not tickets_data:
-                logger.warning("⚠️ No ticket data received from CRM")
-                return result
-            
-            logger.info(f"📊 Processing {len(tickets_data)} tickets...")
-            
-            # Process tickets in batches
-            for i in range(0, len(tickets_data), self.batch_size):
-                batch = tickets_data[i:i + self.batch_size]
-                logger.info(f"📦 Processing ticket batch {i//self.batch_size + 1}: records {i+1}-{i+len(batch)}")
-                
-                batch_results = self._process_ticket_batch(batch)
-                
-                # Aggregate results
-                result['new'] += batch_results['new']
-                result['updated'] += batch_results['updated']
-                result['skipped'] += batch_results['skipped']
-                result['errors'].extend(batch_results['errors'])
-                
-                # Commit batch
-                try:
-                    db.session.commit()
-                    logger.debug(f"✅ Committed ticket batch {i//self.batch_size + 1}")
-                except Exception as e:
-                    logger.error(f"❌ Failed to commit ticket batch: {str(e)}")
-                    db.session.rollback()
-                    result['errors'].append(f"Ticket batch commit error: {str(e)}")
-            
-            logger.info(f"✅ Ticket sync complete: {result['new']} new, {result['updated']} updated, {result['skipped']} skipped")
-            
-        except Exception as e:
-            logger.error(f"❌ Ticket sync failed: {str(e)}")
-            db.session.rollback()
-            result['errors'].append(f"Ticket sync error: {str(e)}")
-            raise
-        
-        return result
-    
-    def _process_ticket_batch(self, tickets: List[Dict]) -> Dict:
-        """Process a batch of tickets"""
-        result = {'new': 0, 'updated': 0, 'skipped': 0, 'errors': []}
-        
-        for ticket_data in tickets:
-            try:
-                was_created = self.ticket_repo.create_or_update(ticket_data)
-                
-                if was_created is True:
-                    result['new'] += 1
-                elif was_created is False:
-                    result['updated'] += 1
-                else:  # None = skipped
-                    result['skipped'] += 1
-                    
-            except Exception as e:
-                error_msg = f"Ticket {ticket_data.get('id', 'unknown')}: {str(e)}"
-                logger.debug(f"⚠️ {error_msg}")
-                result['errors'].append(error_msg)
-                result['skipped'] += 1
-        
-        return result
-    
-    def sync_all_data(self) -> Dict:
+    def sync_selective_data(self, sync_options: Dict = None) -> Dict:
         """
-        ✅ ENHANCED: Sync all data with comprehensive error handling
+        Sync selected data types with smart update detection
         """
-        logger.info(f"🚀 Starting enhanced CRM sync for company {self.company.id}")
+        logger.info(f"🚀 Starting selective CRM sync for company {self.company.id}")
+        
+        # Default to sync all if no options provided
+        if sync_options is None:
+            sync_options = {
+                'customers': True,
+                'payments': True,
+                'tickets': True,
+                'usage': True
+            }
         
         # Update sync status
         self.company.update_sync_status('in_progress')
@@ -556,66 +481,111 @@ class CRMService:
         overall_result = {
             'success': False,
             'message': '',
-            'customers': {'new': 0, 'updated': 0, 'skipped': 0},
-            'payments': {'new': 0, 'updated': 0, 'skipped': 0},
-            'tickets': {'new': 0, 'updated': 0, 'skipped': 0},
+            'customers': {'new': 0, 'updated': 0, 'skipped': 0, 'synced': False},
+            'payments': {'new': 0, 'updated': 0, 'skipped': 0, 'synced': False},
+            'tickets': {'new': 0, 'updated': 0, 'skipped': 0, 'synced': False},
+            'usage': {'new': 0, 'updated': 0, 'skipped': 0, 'synced': False},
             'errors': [],
             'sync_time': 0
         }
         
         try:
-            # Sync customers first (required for payments and tickets)
-            logger.info("🔄 Phase 1: Syncing customers...")
-            customer_result = self._sync_customers()
-            overall_result['customers'] = {
-                'new': customer_result['new'],
-                'updated': customer_result['updated'],
-                'skipped': customer_result['skipped']
-            }
-            overall_result['errors'].extend(customer_result.get('errors', []))
+            # Sync customers first (required for other entities)
+            if sync_options.get('customers', False):
+                logger.info("🔄 Phase 1: Checking customers...")
+                customers_data = self._fetch_data_progressive(self.CUSTOMER_TABLE)
+                
+                if self._has_data_changed('customers', customers_data):
+                    logger.info("📝 Customer data has changed, syncing...")
+                    customer_result = self._sync_customers_batch(customers_data)
+                    overall_result['customers'] = {
+                        'new': customer_result['new'],
+                        'updated': customer_result['updated'],
+                        'skipped': customer_result['skipped'],
+                        'synced': True
+                    }
+                    overall_result['errors'].extend(customer_result.get('errors', []))
+                else:
+                    logger.info("✅ No changes in customer data, skipping")
+                    overall_result['customers']['synced'] = False
             
             # Sync payments
-            logger.info("🔄 Phase 2: Syncing payments...")
-            payment_result = self._sync_payments()
-            overall_result['payments'] = {
-                'new': payment_result['new'],
-                'updated': payment_result['updated'],
-                'skipped': payment_result['skipped']
-            }
-            overall_result['errors'].extend(payment_result.get('errors', []))
+            if sync_options.get('payments', False):
+                logger.info("🔄 Phase 2: Checking payments...")
+                payments_data = self._fetch_data_progressive(self.PAYMENT_TABLE)
+                
+                if self._has_data_changed('payments', payments_data):
+                    logger.info("📝 Payment data has changed, syncing...")
+                    payment_result = self._sync_payments_batch(payments_data)
+                    overall_result['payments'] = {
+                        'new': payment_result['new'],
+                        'updated': payment_result['updated'],
+                        'skipped': payment_result['skipped'],
+                        'synced': True
+                    }
+                    overall_result['errors'].extend(payment_result.get('errors', []))
+                else:
+                    logger.info("✅ No changes in payment data, skipping")
+                    overall_result['payments']['synced'] = False
             
             # Sync tickets
-            logger.info("🔄 Phase 3: Syncing tickets...")
-            ticket_result = self._sync_tickets()
-            overall_result['tickets'] = {
-                'new': ticket_result['new'],
-                'updated': ticket_result['updated'],
-                'skipped': ticket_result['skipped']
-            }
-            overall_result['errors'].extend(ticket_result.get('errors', []))
+            if sync_options.get('tickets', False):
+                logger.info("🔄 Phase 3: Checking tickets...")
+                tickets_data = self._fetch_data_progressive(self.TICKET_TABLE)
+                
+                if self._has_data_changed('tickets', tickets_data):
+                    logger.info("📝 Ticket data has changed, syncing...")
+                    ticket_result = self._sync_tickets_batch(tickets_data)
+                    overall_result['tickets'] = {
+                        'new': ticket_result['new'],
+                        'updated': ticket_result['updated'],
+                        'skipped': ticket_result['skipped'],
+                        'synced': True
+                    }
+                    overall_result['errors'].extend(ticket_result.get('errors', []))
+                else:
+                    logger.info("✅ No changes in ticket data, skipping")
+                    overall_result['tickets']['synced'] = False
+            
+            # Sync usage statistics
+            if sync_options.get('usage', False):
+                logger.info("🔄 Phase 4: Checking usage statistics...")
+                usage_data = self._fetch_data_progressive(self.USAGE_TABLE)
+                
+                if self._has_data_changed('usage', usage_data):
+                    logger.info("📝 Usage data has changed, syncing...")
+                    usage_result = self._sync_usage_batch(usage_data)
+                    overall_result['usage'] = {
+                        'new': usage_result['new'],
+                        'updated': usage_result['updated'],
+                        'skipped': usage_result['skipped'],
+                        'synced': True
+                    }
+                    overall_result['errors'].extend(usage_result.get('errors', []))
+                else:
+                    logger.info("✅ No changes in usage data, skipping")
+                    overall_result['usage']['synced'] = False
             
             # Calculate totals
-            total_new = (overall_result['customers']['new'] + 
-                        overall_result['payments']['new'] + 
-                        overall_result['tickets']['new'])
-            
-            total_updated = (overall_result['customers']['updated'] + 
-                           overall_result['payments']['updated'] + 
-                           overall_result['tickets']['updated'])
+            total_new = sum(overall_result[key]['new'] for key in ['customers', 'payments', 'tickets', 'usage'])
+            total_updated = sum(overall_result[key]['updated'] for key in ['customers', 'payments', 'tickets', 'usage'])
             
             # Update sync status
             overall_result['sync_time'] = round(time.time() - start_time, 2)
             
             if len(overall_result['errors']) == 0:
                 overall_result['success'] = True
-                overall_result['message'] = f"✅ Sync completed successfully! {total_new} new, {total_updated} updated records in {overall_result['sync_time']}s"
+                if total_new == 0 and total_updated == 0:
+                    overall_result['message'] = f"✅ Sync completed! No changes detected in selected data."
+                else:
+                    overall_result['message'] = f"✅ Sync completed successfully! {total_new} new, {total_updated} updated records in {overall_result['sync_time']}s"
                 self.company.update_sync_status('completed')
             else:
-                overall_result['success'] = True  # Partial success
+                overall_result['success'] = True
                 overall_result['message'] = f"⚠️ Sync completed with {len(overall_result['errors'])} warnings. {total_new} new, {total_updated} updated records"
                 self.company.update_sync_status('completed')
             
-            logger.info(f"✅ Enhanced CRM sync completed: {overall_result['message']}")
+            logger.info(f"✅ Selective sync completed: {overall_result['message']}")
             
         except Exception as e:
             overall_result['success'] = False
@@ -624,116 +594,137 @@ class CRMService:
             overall_result['sync_time'] = round(time.time() - start_time, 2)
             
             self.company.update_sync_status('failed', str(e))
-            logger.error(f"❌ Enhanced CRM sync failed: {str(e)}")
+            logger.error(f"❌ Selective sync failed: {str(e)}")
         
         return overall_result
-
-
-# ✅ DEBUGGING AND TESTING FUNCTIONS
-
-def test_enhanced_crm_connection(company_id: int = 1):
-    """
-    Test the enhanced CRM connection
-    Use this to debug your CRM connection issues
-    """
-    try:
-        from app.models.company import Company
-        company = Company.query.get(company_id)
+    
+    # Keep existing batch sync methods
+    def _sync_customers_batch(self, customers_data: List[Dict]) -> Dict:
+        """Sync customers with batch processing"""
+        result = {'new': 0, 'updated': 0, 'skipped': 0, 'errors': []}
         
-        if not company:
-            print(f"❌ Company {company_id} not found")
-            return
-        
-        if not company.crm_api_url:
-            print(f"❌ No CRM API URL configured for company {company.name}")
-            return
-        
-        print(f"🧪 Testing enhanced CRM connection for {company.name}")
-        print(f"🌐 API URL: {company.crm_api_url}")
-        
-        crm_service = CRMService(company)
-        result = crm_service.test_connection()
-        
-        print(f"\n{'✅ SUCCESS' if result['success'] else '❌ FAILURE'}: {result['message']}")
-        
-        print(f"\n📊 Table Test Results:")
-        for table, info in result['debug_info'].items():
-            status = "✅" if info['accessible'] else "❌"
-            print(f"  {status} {table}: {info['record_count']} records")
-            if info['sample_keys']:
-                print(f"    Sample fields: {', '.join(info['sample_keys'][:5])}")
-            if info['error']:
-                print(f"    Error: {info['error']}")
+        for i in range(0, len(customers_data), self.batch_size):
+            batch = customers_data[i:i + self.batch_size]
+            
+            for customer_data in batch:
+                try:
+                    was_created = self.customer_repo.create_or_update(customer_data)
+                    
+                    if was_created is True:
+                        result['new'] += 1
+                    elif was_created is False:
+                        result['updated'] += 1
+                    else:
+                        result['skipped'] += 1
+                        
+                except Exception as e:
+                    result['errors'].append(f"Customer {customer_data.get('id')}: {str(e)}")
+                    result['skipped'] += 1
+            
+            try:
+                db.session.commit()
+            except Exception as e:
+                logger.error(f"❌ Failed to commit customer batch: {str(e)}")
+                db.session.rollback()
         
         return result
+    
+    def _sync_payments_batch(self, payments_data: List[Dict]) -> Dict:
+        """Sync payments with batch processing"""
+        result = {'new': 0, 'updated': 0, 'skipped': 0, 'errors': []}
         
-    except Exception as e:
-        print(f"❌ Test failed: {str(e)}")
-        return None
-
-
-def run_enhanced_sync(company_id: int = 1):
-    """
-    Run the enhanced sync process
-    Use this to test the full sync with better error handling
-    """
-    try:
-        from app.models.company import Company
-        company = Company.query.get(company_id)
-        
-        if not company:
-            print(f"❌ Company {company_id} not found")
-            return
-        
-        print(f"🚀 Starting enhanced sync for {company.name}")
-        
-        crm_service = CRMService(company)
-        result = crm_service.sync_all_data()
-        
-        print(f"\n{'✅ SUCCESS' if result['success'] else '❌ FAILURE'}: {result['message']}")
-        print(f"⏱️ Sync time: {result['sync_time']}s")
-        
-        print(f"\n📊 Sync Results:")
-        print(f"  👥 Customers: {result['customers']['new']} new, {result['customers']['updated']} updated, {result['customers']['skipped']} skipped")
-        print(f"  💰 Payments: {result['payments']['new']} new, {result['payments']['updated']} updated, {result['payments']['skipped']} skipped")
-        print(f"  🎫 Tickets: {result['tickets']['new']} new, {result['tickets']['updated']} updated, {result['tickets']['skipped']} skipped")
-        
-        if result['errors']:
-            print(f"\n⚠️ Errors/Warnings ({len(result['errors'])}):")
-            for error in result['errors'][:5]:  # Show first 5 errors
-                print(f"  - {error}")
-            if len(result['errors']) > 5:
-                print(f"  ... and {len(result['errors']) - 5} more")
+        for i in range(0, len(payments_data), self.batch_size):
+            batch = payments_data[i:i + self.batch_size]
+            
+            for payment_data in batch:
+                try:
+                    was_created = self.payment_repo.create_or_update(payment_data)
+                    
+                    if was_created is True:
+                        result['new'] += 1
+                    elif was_created is False:
+                        result['updated'] += 1
+                    else:
+                        result['skipped'] += 1
+                        
+                except Exception as e:
+                    result['errors'].append(f"Payment {payment_data.get('id')}: {str(e)}")
+                    result['skipped'] += 1
+            
+            try:
+                db.session.commit()
+            except Exception as e:
+                logger.error(f"❌ Failed to commit payment batch: {str(e)}")
+                db.session.rollback()
         
         return result
+    
+    def _sync_tickets_batch(self, tickets_data: List[Dict]) -> Dict:
+        """Sync tickets with batch processing"""
+        result = {'new': 0, 'updated': 0, 'skipped': 0, 'errors': []}
         
-    except Exception as e:
-        print(f"❌ Enhanced sync failed: {str(e)}")
-        return None
-
-
-# ✅ USAGE INSTRUCTIONS
-"""
-TO FIX YOUR HTTP 500 AND TIMEOUT ISSUES:
-
-1. Replace your existing CRM service with this enhanced version
-2. Test the connection:
-   python -c "from app.services.crm_service import test_enhanced_crm_connection; test_enhanced_crm_connection()"
-
-3. Run a test sync:
-   python -c "from app.services.crm_service import run_enhanced_sync; run_enhanced_sync()"
-
-4. If still having issues, check your PHP API:
-   - Increase PHP max_execution_time
-   - Increase PHP memory_limit
-   - Add error logging to your api.php
-   - Consider pagination in your API
-
-KEY IMPROVEMENTS:
-✅ Handles HTTP 500 errors with retry logic
-✅ Increased timeouts for large datasets  
-✅ Progressive/batch loading to prevent memory issues
-✅ Better error reporting and diagnostics
-✅ Exponential backoff for retries
-✅ Graceful degradation when some data fails
-"""
+        for i in range(0, len(tickets_data), self.batch_size):
+            batch = tickets_data[i:i + self.batch_size]
+            
+            for ticket_data in batch:
+                try:
+                    was_created = self.ticket_repo.create_or_update(ticket_data)
+                    
+                    if was_created is True:
+                        result['new'] += 1
+                    elif was_created is False:
+                        result['updated'] += 1
+                    else:
+                        result['skipped'] += 1
+                        
+                except Exception as e:
+                    result['errors'].append(f"Ticket {ticket_data.get('id')}: {str(e)}")
+                    result['skipped'] += 1
+            
+            try:
+                db.session.commit()
+            except Exception as e:
+                logger.error(f"❌ Failed to commit ticket batch: {str(e)}")
+                db.session.rollback()
+        
+        return result
+    
+    def _sync_usage_batch(self, usage_data: List[Dict]) -> Dict:
+        """Sync usage statistics with batch processing"""
+        result = {'new': 0, 'updated': 0, 'skipped': 0, 'errors': []}
+        
+        for i in range(0, len(usage_data), self.batch_size):
+            batch = usage_data[i:i + self.batch_size]
+            
+            for usage_record in batch:
+                try:
+                    was_created = self.usage_repo.create_or_update(usage_record)
+                    
+                    if was_created is True:
+                        result['new'] += 1
+                    elif was_created is False:
+                        result['updated'] += 1
+                    else:
+                        result['skipped'] += 1
+                        
+                except Exception as e:
+                    result['errors'].append(f"Usage {usage_record.get('id')}: {str(e)}")
+                    result['skipped'] += 1
+            
+            try:
+                db.session.commit()
+            except Exception as e:
+                logger.error(f"❌ Failed to commit usage batch: {str(e)}")
+                db.session.rollback()
+        
+        return result
+    
+    # Keep backward compatibility
+    def sync_all_data(self) -> Dict:
+        """Sync all data types (backward compatible method)"""
+        return self.sync_selective_data({
+            'customers': True,
+            'payments': True,
+            'tickets': True,
+            'usage': True
+        })

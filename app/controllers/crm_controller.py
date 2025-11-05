@@ -1,8 +1,13 @@
 """
-FIXED CRM Controller - Enhanced Error Handling
+ENHANCED CRM Controller with Selective Sync
 app/controllers/crm_controller.py
+
+Features:
+- Selective sync options (choose what to sync)
+- Smart update detection (skip unchanged data)
+- Better error reporting
 """
-from flask import Blueprint, render_template, jsonify, flash, redirect, url_for
+from flask import Blueprint, render_template, jsonify, flash, redirect, url_for, request
 from flask_login import login_required, current_user
 from app.extensions import db
 from app.models.customer import Customer
@@ -67,7 +72,19 @@ def dashboard():
 @login_required
 @manager_required
 def sync():
-    """✅ ENHANCED: Manually trigger CRM data sync with better error handling"""
+    """
+    ✅ ENHANCED: Selective sync with smart update detection
+    
+    Request body (JSON):
+    {
+        "sync_customers": true,
+        "sync_payments": true,
+        "sync_tickets": true,
+        "sync_usage": false
+    }
+    
+    If no options provided, syncs all data types.
+    """
     try:
         company = current_user.company
         
@@ -87,6 +104,22 @@ def sync():
                 'current_status': company.sync_status
             }), 400
         
+        # Get sync options from request
+        try:
+            sync_options = request.get_json() or {}
+        except:
+            sync_options = {}
+        
+        # Convert sync options to expected format
+        formatted_options = {
+            'customers': sync_options.get('sync_customers', True),
+            'payments': sync_options.get('sync_payments', True),
+            'tickets': sync_options.get('sync_tickets', True),
+            'usage': sync_options.get('sync_usage', True)
+        }
+        
+        logger.info(f"🔄 Selective sync requested with options: {formatted_options}")
+        
         # Initialize CRM service
         try:
             crm_service = CRMService(company)
@@ -97,7 +130,7 @@ def sync():
                 'fix_instructions': 'Check your CRM configuration in Company Settings'
             }), 400
         
-        # ✅ ENHANCED: Test connection first with detailed results
+        # Test connection first
         logger.info(f"🔍 Testing CRM connection for company {company.id}")
         connection_result = crm_service.test_connection()
         
@@ -106,7 +139,6 @@ def sync():
             debug_info = connection_result.get('debug_info', {})
             
             logger.error(f"❌ CRM connection failed: {error_message}")
-            logger.error(f"Debug info: {debug_info}")
             
             return jsonify({
                 'success': False,
@@ -115,46 +147,36 @@ def sync():
                 'fix_instructions': [
                     'Check if the CRM API URL is correct',
                     'Verify the CRM server is running and accessible',
-                    'Confirm the table names are correct',
-                    'Check if the API returns JSON format'
+                    'Confirm the table names are correct'
                 ]
             }), 400
         
-        # Perform sync
-        logger.info(f"🚀 Starting manual CRM sync for company {company.id}")
-        results = crm_service.sync_all_data()
+        # Perform selective sync
+        logger.info(f"🚀 Starting selective sync for company {company.id}")
+        results = crm_service.sync_selective_data(formatted_options)
         
         if results['success']:
-            # Build success message
-            total_new = (results.get('customers', {}).get('new', 0) + 
-                        results.get('payments', {}).get('new', 0) + 
-                        results.get('tickets', {}).get('new', 0) +
-                        results.get('usage', {}).get('new', 0))
+            # Build success message with details
+            message_parts = []
             
-            total_updated = (results.get('customers', {}).get('updated', 0) + 
-                           results.get('payments', {}).get('updated', 0) + 
-                           results.get('tickets', {}).get('updated', 0) +
-                           results.get('usage', {}).get('updated', 0))
-            
-            message = f"Successfully synced {total_new} new and {total_updated} updated records."
-            
-            # Add details for each type
-            details = []
             for data_type in ['customers', 'payments', 'tickets', 'usage']:
                 data = results.get(data_type, {})
-                if data.get('new', 0) > 0 or data.get('updated', 0) > 0:
-                    details.append(f"{data_type}: {data.get('new', 0)} new, {data.get('updated', 0)} updated")
+                if data.get('synced', False):
+                    new = data.get('new', 0)
+                    updated = data.get('updated', 0)
+                    if new > 0 or updated > 0:
+                        message_parts.append(f"{data_type}: {new} new, {updated} updated")
+                else:
+                    message_parts.append(f"{data_type}: no changes")
             
-            if details:
-                message += f" Details: {'; '.join(details)}"
+            message = "Successfully synced! " + "; ".join(message_parts)
             
             return jsonify({
                 'success': True,
                 'message': message,
                 'results': results,
                 'summary': {
-                    'total_new': total_new,
-                    'total_updated': total_updated,
+                    'sync_time': results.get('sync_time', 0),
                     'customers': results.get('customers', {}),
                     'payments': results.get('payments', {}),
                     'tickets': results.get('tickets', {}),
@@ -164,23 +186,17 @@ def sync():
         else:
             # Handle sync failure
             errors = results.get('errors', ['Unknown error'])
-            error_msg = '; '.join(errors[:3])  # Show first 3 errors
+            error_msg = '; '.join(errors[:3])
             
             return jsonify({
                 'success': False,
                 'message': f'Sync failed: {error_msg}',
                 'errors': errors,
-                'results': results,
-                'fix_instructions': [
-                    'Check the error messages above',
-                    'Verify your CRM API is working',
-                    'Check if data formats have changed',
-                    'Try syncing individual data types to isolate the issue'
-                ]
+                'results': results
             }), 500
             
     except Exception as e:
-        logger.error(f"❌ Error during manual sync: {str(e)}", exc_info=True)
+        logger.error(f"❌ Error during sync: {str(e)}", exc_info=True)
         
         # Reset sync status on error
         try:
@@ -193,13 +209,7 @@ def sync():
         return jsonify({
             'success': False,
             'message': f'Sync error: {str(e)}',
-            'error_type': type(e).__name__,
-            'fix_instructions': [
-                'Check the error message above',
-                'Verify your CRM configuration',
-                'Check application logs for more details',
-                'Contact support if the issue persists'
-            ]
+            'error_type': type(e).__name__
         }), 500
 
 
@@ -207,15 +217,14 @@ def sync():
 @login_required
 @manager_required
 def test_connection():
-    """✅ ENHANCED: Test CRM API connection with detailed debugging"""
+    """Test CRM API connection with detailed debugging"""
     try:
         company = current_user.company
         
         if not company.crm_api_url:
             return jsonify({
                 'success': False,
-                'message': 'CRM API URL not configured',
-                'fix_instructions': 'Configure CRM API URL in Company Settings'
+                'message': 'CRM API URL not configured'
             }), 400
         
         try:
@@ -223,14 +232,10 @@ def test_connection():
         except ValueError as e:
             return jsonify({
                 'success': False,
-                'message': str(e),
-                'fix_instructions': 'Check CRM configuration'
+                'message': str(e)
             }), 400
         
-        # Test connection with detailed results
         result = crm_service.test_connection()
-        
-        # Always return the full result for debugging
         return jsonify(result)
         
     except Exception as e:
@@ -238,12 +243,7 @@ def test_connection():
         return jsonify({
             'success': False,
             'message': str(e),
-            'error_type': type(e).__name__,
-            'fix_instructions': [
-                'Check if CRM API URL is correct',
-                'Verify CRM server is accessible',
-                'Check network connectivity'
-            ]
+            'error_type': type(e).__name__
         }), 500
 
 
@@ -259,6 +259,140 @@ def sync_status():
         'total_syncs': company.total_syncs,
         'error': company.sync_error
     })
+
+
+# Keep all other existing routes (customers, tickets, payments, etc.)
+# ... (your existing customer, ticket, payment routes remain unchanged)
+
+@crm_bp.route('/customers')
+@login_required
+def customers():
+    """List all customers with statistics"""
+    company = current_user.company
+    customer_repo = CustomerRepository(company)
+    ticket_repo = TicketRepository(company)
+    payment_repo = PaymentRepository(company)
+
+    page = request.args.get('page', 1, type=int)
+    status = request.args.get('status')
+    risk = request.args.get('risk')
+
+    pagination = customer_repo.get_paginated(page=page, per_page=20, status=status, risk=risk)
+
+    stats = {
+        'customers': customer_repo.count(),
+        'active_customers': customer_repo.count_by_status('active'),
+        'tickets': ticket_repo.count(),
+        'open_tickets': ticket_repo.count_by_status('open'),
+        'payments': payment_repo.count(),
+        'total_revenue': payment_repo.get_total_revenue(),
+        'last_sync': company.last_sync_at,
+        'sync_status': company.sync_status
+    }
+
+    recent_customers = customer_repo.get_recent(limit=5)
+
+    return render_template(
+        'crm/customers.html',
+        company=company,
+        stats=stats,
+        recent_customers=recent_customers,
+        customers=pagination.items,
+        pagination=pagination,
+        current_status=status,
+        current_risk=risk
+    )
+
+
+@crm_bp.route('/customers/<int:customer_id>')
+@login_required
+def customer_detail(customer_id):
+    """Customer detail page"""
+    company = current_user.company
+    customer_repo = CustomerRepository(company)
+    ticket_repo = TicketRepository(company)
+    payment_repo = PaymentRepository(company)
+    
+    customer = customer_repo.get_by_id(customer_id)
+    
+    if not customer:
+        flash('Customer not found', 'danger')
+        return redirect(url_for('crm.customers'))
+    
+    tickets = ticket_repo.get_by_customer(customer_id)
+    payments = payment_repo.get_by_customer(customer_id)
+    
+    return render_template(
+        'crm/customer_detail.html',
+        company=company,
+        customer=customer,
+        tickets=tickets,
+        payments=payments
+    )
+
+
+@crm_bp.route('/tickets')
+@login_required
+def tickets():
+    """List all support tickets"""
+    company = current_user.company
+    repo = TicketRepository(company)
+    
+    page = request.args.get('page', 1, type=int)
+    status = request.args.get('status')
+    priority = request.args.get('priority')
+    
+    pagination = repo.get_paginated(page=page, per_page=20, status=status, priority=priority)
+    
+    return render_template(
+        'crm/tickets.html',
+        company=company,
+        tickets=pagination.items,
+        pagination=pagination,
+        current_status=status,
+        current_priority=priority
+    )
+
+
+@crm_bp.route('/tickets/<int:ticket_id>')
+@login_required
+def ticket_detail(ticket_id):
+    """Ticket detail page"""
+    company = current_user.company
+    repo = TicketRepository(company)
+    
+    ticket = repo.get_by_id(ticket_id)
+    
+    if not ticket:
+        flash('Ticket not found', 'danger')
+        return redirect(url_for('crm.tickets'))
+    
+    return render_template(
+        'crm/ticket_detail.html',
+        company=company,
+        ticket=ticket
+    )
+
+
+@crm_bp.route('/payments')
+@login_required
+def payments():
+    """List all payment transactions"""
+    company = current_user.company
+    repo = PaymentRepository(company)
+    
+    page = request.args.get('page', 1, type=int)
+    status = request.args.get('status')
+    
+    pagination = repo.get_paginated(page=page, per_page=20, status=status)
+    
+    return render_template(
+        'crm/payments.html',
+        company=company,
+        payments=pagination.items,
+        pagination=pagination,
+        current_status=status
+    )
 
 
 @crm_bp.route('/statistics')
@@ -301,149 +435,3 @@ def statistics():
     }
     
     return jsonify(stats)
-
-
-# Additional routes (customers, tickets, payments) would go here...
-# I'm keeping them the same as your original file for brevity
-
-@crm_bp.route('/customers')
-@login_required
-def customers():
-    """List all customers with statistics"""
-    company = current_user.company
-    customer_repo = CustomerRepository(company)
-    ticket_repo = TicketRepository(company)
-    payment_repo = PaymentRepository(company)
-
-    # Get pagination parameters
-    from flask import request
-    page = request.args.get('page', 1, type=int)
-    status = request.args.get('status')
-    risk = request.args.get('risk')
-
-    # Get paginated customers
-    pagination = customer_repo.get_paginated(page=page, per_page=20, status=status, risk=risk)
-
-    # Get stats
-    stats = {
-        'customers': customer_repo.count(),
-        'active_customers': customer_repo.count_by_status('active'),
-        'tickets': ticket_repo.count(),
-        'open_tickets': ticket_repo.count_by_status('open'),
-        'payments': payment_repo.count(),
-        'total_revenue': payment_repo.get_total_revenue(),
-        'last_sync': company.last_sync_at,
-        'sync_status': company.sync_status
-    }
-
-    # Get recent customers
-    recent_customers = customer_repo.get_recent(limit=5)
-
-    return render_template(
-        'crm/customers.html',
-        company=company,
-        stats=stats,
-        recent_customers=recent_customers,
-        customers=pagination.items,
-        pagination=pagination,
-        current_status=status,
-        current_risk=risk
-    )
-
-
-@crm_bp.route('/customers/<int:customer_id>')
-@login_required
-def customer_detail(customer_id):
-    """Customer detail page"""
-    company = current_user.company
-    customer_repo = CustomerRepository(company)
-    ticket_repo = TicketRepository(company)
-    payment_repo = PaymentRepository(company)
-    
-    customer = customer_repo.get_by_id(customer_id)
-    
-    if not customer:
-        flash('Customer not found', 'danger')
-        return redirect(url_for('crm.customers'))
-    
-    # Get customer's tickets and payments
-    tickets = ticket_repo.get_by_customer(customer_id)
-    payments = payment_repo.get_by_customer(customer_id)
-    
-    return render_template(
-        'crm/customer_detail.html',
-        company=company,
-        customer=customer,
-        tickets=tickets,
-        payments=payments
-    )
-
-
-@crm_bp.route('/tickets')
-@login_required
-def tickets():
-    """List all support tickets"""
-    company = current_user.company
-    repo = TicketRepository(company)
-    
-    # Get pagination parameters
-    from flask import request
-    page = request.args.get('page', 1, type=int)
-    status = request.args.get('status')
-    priority = request.args.get('priority')
-    
-    # Get paginated tickets
-    pagination = repo.get_paginated(page=page, per_page=20, status=status, priority=priority)
-    
-    return render_template(
-        'crm/tickets.html',
-        company=company,
-        tickets=pagination.items,
-        pagination=pagination,
-        current_status=status,
-        current_priority=priority
-    )
-
-
-@crm_bp.route('/tickets/<int:ticket_id>')
-@login_required
-def ticket_detail(ticket_id):
-    """Ticket detail page"""
-    company = current_user.company
-    repo = TicketRepository(company)
-    
-    ticket = repo.get_by_id(ticket_id)
-    
-    if not ticket:
-        flash('Ticket not found', 'danger')
-        return redirect(url_for('crm.tickets'))
-    
-    return render_template(
-        'crm/ticket_detail.html',
-        company=company,
-        ticket=ticket
-    )
-
-
-@crm_bp.route('/payments')
-@login_required
-def payments():
-    """List all payment transactions"""
-    company = current_user.company
-    repo = PaymentRepository(company)
-    
-    # Get pagination parameters
-    from flask import request
-    page = request.args.get('page', 1, type=int)
-    status = request.args.get('status')
-    
-    # Get paginated payments
-    pagination = repo.get_paginated(page=page, per_page=20, status=status)
-    
-    return render_template(
-        'crm/payments.html',
-        company=company,
-        payments=pagination.items,
-        pagination=pagination,
-        current_status=status
-    )
