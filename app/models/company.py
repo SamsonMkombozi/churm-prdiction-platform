@@ -1,57 +1,42 @@
 """
-Updated Company Model with Sync Fields
-app/models/company.py
+Temporary Company Model - Compatible with existing database
+Replace app/models/company.py with this version temporarily
 
-Complete Company model with all sync-related fields and methods.
+This version only includes columns that exist in your current database
 """
 
 from app.extensions import db
 from datetime import datetime
-from cryptography.fernet import Fernet
-import os
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Company(db.Model):
-    """Company model with sync capabilities"""
+    """Company model compatible with existing database schema"""
     
-    __tablename__ = 'company'
+    __tablename__ = 'companies'
     
-    # Basic company fields
+    # Basic company fields (these should exist)
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     slug = db.Column(db.String(50), unique=True, nullable=False)
     description = db.Column(db.Text)
-    logo_url = db.Column(db.String(255))
     industry = db.Column(db.String(100))
     website = db.Column(db.String(255))
     
-    # Subscription and status
-    subscription_plan = db.Column(db.String(50), default='basic')
+    # Status
     is_active = db.Column(db.Boolean, default=True)
     
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Sync-related fields
+    # Sync-related fields (these might exist)
     last_sync_at = db.Column(db.DateTime)
-    sync_status = db.Column(db.String(50), default='never')  # never, pending, in_progress, completed, failed
+    sync_status = db.Column(db.String(50), default='never')
     sync_error = db.Column(db.Text)
     total_syncs = db.Column(db.Integer, default=0)
-    
-    # PostgreSQL connection fields
-    postgresql_host = db.Column(db.String(255))
-    postgresql_port = db.Column(db.Integer, default=5432)
-    postgresql_database = db.Column(db.String(255))
-    postgresql_username = db.Column(db.String(255))
-    postgresql_password_encrypted = db.Column(db.Text)
-    
-    # API connection fields
-    api_base_url = db.Column(db.String(255))
-    api_key_encrypted = db.Column(db.Text)
-    
-    # Additional sync settings (JSON field)
-    sync_settings = db.Column(db.JSON)
     
     # Relationships
     users = db.relationship('User', backref='company', lazy=True)
@@ -61,57 +46,101 @@ class Company(db.Model):
     def __repr__(self):
         return f'<Company {self.name}>'
     
-    # Encryption/Decryption methods
-    def _get_encryption_key(self):
-        """Get encryption key from environment"""
-        key = os.environ.get('ENCRYPTION_KEY')
-        if not key:
-            # Generate a key if not set (for development)
-            key = Fernet.generate_key()
-            print(f"⚠️  Generated new encryption key: {key.decode()}")
-            print("⚠️  Set ENCRYPTION_KEY environment variable for production!")
-        return key if isinstance(key, bytes) else key.encode()
+    # Safe property getters (return None if column doesn't exist)
+    @property
+    def logo_url(self):
+        return getattr(self, '_logo_url', None)
     
-    def encrypt_password(self, password):
-        """Encrypt PostgreSQL password"""
-        if not password:
-            return None
-        f = Fernet(self._get_encryption_key())
-        return f.encrypt(password.encode()).decode()
+    @property
+    def postgresql_host(self):
+        return getattr(self, '_postgresql_host', None)
     
-    def decrypt_password(self):
-        """Decrypt PostgreSQL password"""
-        if not self.postgresql_password_encrypted:
-            return None
-        try:
-            f = Fernet(self._get_encryption_key())
-            return f.decrypt(self.postgresql_password_encrypted.encode()).decode()
-        except Exception:
-            return None
+    @property
+    def postgresql_port(self):
+        return getattr(self, '_postgresql_port', 5432)
     
-    def encrypt_api_key(self, api_key):
-        """Encrypt API key"""
-        if not api_key:
-            return None
-        f = Fernet(self._get_encryption_key())
-        return f.encrypt(api_key.encode()).decode()
+    @property
+    def postgresql_database(self):
+        return getattr(self, '_postgresql_database', None)
     
-    def decrypt_api_key(self):
-        """Decrypt API key"""
-        if not self.api_key_encrypted:
-            return None
-        try:
-            f = Fernet(self._get_encryption_key())
-            return f.decrypt(self.api_key_encrypted.encode()).decode()
-        except Exception:
-            return None
+    @property
+    def postgresql_username(self):
+        return getattr(self, '_postgresql_username', None)
+    
+    @property
+    def postgresql_password_encrypted(self):
+        return getattr(self, '_postgresql_password_encrypted', None)
+    
+    @property
+    def api_base_url(self):
+        return getattr(self, '_api_base_url', None)
+    
+    @property
+    def api_key_encrypted(self):
+        return getattr(self, '_api_key_encrypted', None)
+    
+    @property
+    def api_username(self):
+        return getattr(self, '_api_username', None)
+    
+    @property
+    def api_password_encrypted(self):
+        return getattr(self, '_api_password_encrypted', None)
+    
+    @property
+    def settings(self):
+        return getattr(self, '_settings', '{}')
+    
+    # Safe setters
+    def set_postgresql_password(self, password):
+        """Placeholder - implement after schema fix"""
+        logger.warning("PostgreSQL password setting not available - schema needs update")
+        return
+    
+    def get_postgresql_password(self):
+        """Placeholder - implement after schema fix"""
+        return None
+    
+    def set_api_key(self, api_key):
+        """Placeholder - implement after schema fix"""
+        logger.warning("API key setting not available - schema needs update")
+        return
+    
+    def get_api_key(self):
+        """Placeholder - implement after schema fix"""
+        return None
+    
+    def set_api_password(self, password):
+        """Placeholder - implement after schema fix"""
+        logger.warning("API password setting not available - schema needs update")
+        return
+    
+    def get_api_password(self):
+        """Placeholder - implement after schema fix"""
+        return None
+    
+    # Connection configuration methods
+    def has_postgresql_config(self):
+        """Check if PostgreSQL connection is configured"""
+        return False  # Always false until schema is fixed
+    
+    def has_api_config(self):
+        """Check if API connection is configured"""
+        return False  # Always false until schema is fixed
+    
+    def get_preferred_sync_method(self):
+        """Get preferred sync method"""
+        return 'none'
     
     # Sync status methods
     def mark_sync_started(self):
         """Mark that sync has started"""
         self.sync_status = 'in_progress'
         self.sync_error = None
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception as e:
+            logger.error(f"Error updating sync status: {e}")
     
     def mark_sync_completed(self):
         """Mark that sync completed successfully"""
@@ -119,37 +148,28 @@ class Company(db.Model):
         self.sync_status = 'completed'
         self.sync_error = None
         self.total_syncs = (self.total_syncs or 0) + 1
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception as e:
+            logger.error(f"Error updating sync status: {e}")
     
     def mark_sync_failed(self, error_message):
         """Mark that sync failed"""
         self.sync_status = 'failed'
         self.sync_error = error_message
-        db.session.commit()
-    
-    def update_sync_status(self, status, error=None, commit=True):
-        """Update sync status"""
-        self.sync_status = status
-        
-        if status == 'completed':
-            self.last_sync_at = datetime.utcnow()
-            self.total_syncs = (self.total_syncs or 0) + 1
-            self.sync_error = None
-        elif status == 'failed' and error:
-            self.sync_error = str(error)
-        elif status == 'pending':
-            self.sync_error = None  # Clear error on reset
-        
-        if commit:
+        try:
             db.session.commit()
+        except Exception as e:
+            logger.error(f"Error updating sync status: {e}")
     
-    # Statistics methods
+    # Statistics methods (safe versions)
     def get_customer_count(self):
         """Get total number of customers"""
         try:
             from app.models.customer import Customer
             return Customer.query.filter_by(company_id=self.id).count()
-        except (ImportError, ModuleNotFoundError):
+        except Exception as e:
+            logger.error(f"Error getting customer count: {e}")
             return 0
     
     def get_active_customer_count(self):
@@ -160,31 +180,35 @@ class Company(db.Model):
                 company_id=self.id,
                 status='active'
             ).count()
-        except (ImportError, ModuleNotFoundError, AttributeError):
+        except Exception as e:
+            logger.error(f"Error getting active customer count: {e}")
             return 0
     
     def get_ticket_count(self):
-        """Get total number of tickets for this company"""
+        """Get total number of tickets"""
         try:
             from app.models.ticket import Ticket
             return Ticket.query.filter_by(company_id=self.id).count()
-        except (ImportError, ModuleNotFoundError):
+        except Exception as e:
+            logger.error(f"Error getting ticket count: {e}")
             return 0
     
     def get_payment_count(self):
-        """Get total number of payments for this company"""
+        """Get total number of payments"""
         try:
             from app.models.payment import Payment
             return Payment.query.filter_by(company_id=self.id).count()
-        except (ImportError, ModuleNotFoundError):
+        except Exception as e:
+            logger.error(f"Error getting payment count: {e}")
             return 0
     
     def get_prediction_count(self):
-        """Get total number of predictions for this company"""
+        """Get total number of predictions"""
         try:
             from app.models.prediction import Prediction
             return Prediction.query.filter_by(company_id=self.id).count()
-        except (ImportError, ModuleNotFoundError):
+        except Exception as e:
+            logger.error(f"Error getting prediction count: {e}")
             return 0
     
     def get_high_risk_customer_count(self):
@@ -195,100 +219,97 @@ class Company(db.Model):
                 company_id=self.id,
                 churn_risk='high'
             ).count()
-        except (ImportError, ModuleNotFoundError, AttributeError):
+        except Exception as e:
+            logger.error(f"Error getting high risk customer count: {e}")
             return 0
     
     def get_active_user_count(self):
-        """Get count of active users in this company"""
-        return self.users.filter_by(is_active=True).count()
+        """Get count of active users"""
+        try:
+            return self.users.filter_by(is_active=True).count()
+        except Exception as e:
+            logger.error(f"Error getting active user count: {e}")
+            return 0
     
-    # Connection configuration methods
-    def has_postgresql_config(self):
-        """Check if PostgreSQL connection is configured"""
-        return bool(
-            self.postgresql_host and 
-            self.postgresql_database and 
-            self.postgresql_username and 
-            self.postgresql_password_encrypted
-        )
-    
-    def has_api_config(self):
-        """Check if API connection is configured"""
-        return bool(self.api_base_url and self.api_key_encrypted)
-    
-    def get_preferred_sync_method(self):
-        """Get preferred sync method"""
-        if self.has_postgresql_config():
-            return 'postgresql'
-        elif self.has_api_config():
-            return 'api'
-        else:
-            return 'none'
-    
-    # Sync settings methods
-    def get_sync_settings(self):
-        """Get sync settings as dict"""
-        if self.sync_settings:
-            return self.sync_settings
+    # Settings methods (safe versions)
+    def get_settings(self):
+        """Get company settings as dict"""
         return {
-            'sync_customers': True,
-            'sync_payments': True,
-            'sync_tickets': True,
-            'sync_usage': False,
-            'batch_size': 1000,
-            'sync_frequency': 'manual'
+            'enable_auto_sync': True,
+            'sync_frequency': 3600,
+            'notification_email': '',
+            'enable_email_alerts': False,
+            'prediction_threshold_high': 0.7,
+            'prediction_threshold_medium': 0.4,
+            'prediction_threshold_low': 0.2,
+            'timezone': 'UTC',
+            'currency': 'TZS',
+            'date_format': '%Y-%m-%d'
         }
     
-    def update_sync_settings(self, settings):
-        """Update sync settings"""
-        current_settings = self.get_sync_settings()
-        current_settings.update(settings)
-        self.sync_settings = current_settings
-        db.session.commit()
+    def get_setting(self, key, default=None):
+        """Get a specific setting value"""
+        settings = self.get_settings()
+        return settings.get(key, default)
     
-    # Serialization
+    def update_settings(self, new_settings):
+        """Update company settings - placeholder"""
+        logger.warning("Settings update not available - schema needs update")
+        return
+    
+    # Dashboard statistics
+    def get_dashboard_stats(self):
+        """Get dashboard statistics"""
+        return {
+            'customers': {
+                'total': self.get_customer_count(),
+                'active': self.get_active_customer_count(),
+            },
+            'tickets': {
+                'total': self.get_ticket_count(),
+                'open': 0,  # Placeholder
+            },
+            'payments': {
+                'total': self.get_payment_count(),
+                'total_revenue': 0.0,  # Placeholder
+            },
+            'predictions': {
+                'total': self.get_prediction_count(),
+                'high_risk': self.get_high_risk_customer_count(),
+                'medium_risk': 0,  # Placeholder
+                'low_risk': 0,  # Placeholder
+            },
+            'users': {
+                'total': self.users.count(),
+                'active': self.get_active_user_count(),
+            },
+            'sync': {
+                'status': self.sync_status,
+                'last_sync': self.last_sync_at,
+                'total_syncs': self.total_syncs,
+                'error': self.sync_error,
+            }
+        }
+    
     def to_dict(self, include_sensitive=False):
         """Convert company to dictionary"""
-        data = {
+        return {
             'id': self.id,
             'name': self.name,
             'slug': self.slug,
             'description': self.description,
-            'logo_url': self.logo_url,
             'industry': self.industry,
             'website': self.website,
-            'subscription_plan': self.subscription_plan,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'last_sync_at': self.last_sync_at.isoformat() if self.last_sync_at else None,
             'sync_status': self.sync_status,
-            'total_syncs': self.total_syncs,
-            'statistics': {
-                'total_customers': self.get_customer_count(),
-                'active_customers': self.get_active_customer_count(),
-                'total_tickets': self.get_ticket_count(),
-                'total_payments': self.get_payment_count(),
-                'total_predictions': self.get_prediction_count(),
-                'high_risk_customers': self.get_high_risk_customer_count(),
-                'active_users': self.get_active_user_count()
-            }
+            'total_syncs': self.total_syncs
         }
-        
-        if include_sensitive:
-            data.update({
-                'postgresql_host': self.postgresql_host,
-                'postgresql_port': self.postgresql_port,
-                'postgresql_database': self.postgresql_database,
-                'postgresql_username': self.postgresql_username,
-                'api_base_url': self.api_base_url,
-                'sync_settings': self.get_sync_settings()
-            })
-        
-        return data
     
     @staticmethod
     def create_company(name, slug=None, **kwargs):
-        """Create a new company with default settings"""
+        """Create a new company"""
         if not slug:
             slug = name.lower().replace(' ', '-').replace('_', '-')
         
