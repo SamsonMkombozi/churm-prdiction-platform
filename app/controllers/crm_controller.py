@@ -1,6 +1,11 @@
 """
-Enhanced CRM Controller with Selective Sync Support
+Enhanced CRM Controller with Selective Sync Support - FIXED VERSION
 app/controllers/crm_controller.py
+
+✅ FIXES:
+1. Use last_sync_at instead of last_sync
+2. Use last_sync_at instead of last_sync in sync_status route
+3. Fixed all attribute name mismatches
 
 Handles the selective sync functionality from the dashboard.
 """
@@ -20,7 +25,7 @@ crm_bp = Blueprint('crm', __name__)
 @crm_bp.route('/dashboard')
 @login_required
 def dashboard():
-    """Enhanced CRM Dashboard with PostgreSQL support"""
+    """Enhanced CRM Dashboard with PostgreSQL support - FIXED VERSION"""
     
     company = current_user.company
     if not company:
@@ -31,7 +36,7 @@ def dashboard():
         crm_service = EnhancedCRMService(company)
         connection_info = crm_service.get_connection_info()
         
-        # Get statistics
+        # ✅ FIX: Use correct attribute names from Company model
         stats = {
             'customers': Customer.query.filter_by(company_id=company.id).count(),
             'active_customers': Customer.query.filter_by(company_id=company.id, status='active').count(),
@@ -39,7 +44,7 @@ def dashboard():
             'open_tickets': Ticket.query.filter_by(company_id=company.id, status='open').count(),
             'payments': Payment.query.filter_by(company_id=company.id).count(),
             'total_revenue': db.session.query(func.sum(Payment.amount)).filter_by(company_id=company.id).scalar() or 0,
-            'last_sync': company.last_sync,
+            'last_sync': company.last_sync_at,  # ✅ FIX: Use last_sync_at instead of last_sync
             'sync_status': company.sync_status or 'never'
         }
         
@@ -51,8 +56,8 @@ def dashboard():
         
         # Calculate tenure for customers
         for customer in recent_customers:
-            if customer.contract_start_date:
-                tenure_delta = datetime.utcnow() - customer.contract_start_date
+            if customer.signup_date:  # ✅ FIX: Use signup_date instead of contract_start_date
+                tenure_delta = datetime.utcnow() - customer.signup_date
                 customer.tenure_months = max(1, tenure_delta.days // 30)
             else:
                 customer.tenure_months = 0
@@ -95,7 +100,7 @@ def dashboard():
 @crm_bp.route('/sync', methods=['POST'])
 @login_required
 def sync():
-    """Enhanced selective sync endpoint"""
+    """Enhanced selective sync endpoint - FIXED VERSION"""
     
     company = current_user.company
     if not company:
@@ -206,15 +211,16 @@ def sync():
 @crm_bp.route('/sync/status')
 @login_required
 def sync_status():
-    """Get current sync status"""
+    """Get current sync status - FIXED VERSION"""
     
     company = current_user.company
     if not company:
         return jsonify({'error': 'No company found'}), 404
     
+    # ✅ FIX: Use last_sync_at instead of last_sync
     return jsonify({
         'status': company.sync_status or 'never',
-        'last_sync': company.last_sync.isoformat() if company.last_sync else None,
+        'last_sync': company.last_sync_at.isoformat() if company.last_sync_at else None,
         'error': company.sync_error,
         'total_syncs': company.total_syncs or 0
     })
@@ -304,7 +310,7 @@ def payments():
     per_page = 50
     
     payments = Payment.query.filter_by(company_id=company.id)\
-        .order_by(desc(Payment.transaction_time))\
+        .order_by(desc(Payment.payment_date))\
         .paginate(page=page, per_page=per_page, error_out=False)
     
     return render_template('crm/payments.html', payments=payments)

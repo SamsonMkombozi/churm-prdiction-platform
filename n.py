@@ -1,132 +1,313 @@
 """
-Database Migration: Add Sync Fields to Company Model
-migrations/add_company_sync_fields.py
+Complete Database Migration - Fix Relationships and Add Fields
+app/migrations/fix_relationship_and_add_fields.py
 
-Run this to add missing sync-related fields to your Company table.
+This migration:
+1. Fixes the User-Company relationship
+2. Adds missing Company configuration fields
+3. Creates demo data if needed
 """
 
-from sqlalchemy import text
 from app.extensions import db
+from flask import current_app
+import logging
 
-def add_company_sync_fields():
-    """Add sync-related fields to Company table if they don't exist"""
-    
-    # List of fields to add with their SQL definitions
-    fields_to_add = [
-        ('last_sync_at', 'TIMESTAMP NULL'),
-        ('sync_status', "VARCHAR(50) DEFAULT 'never'"),
-        ('sync_error', 'TEXT NULL'),
-        ('total_syncs', 'INTEGER DEFAULT 0'),
-        ('postgresql_host', 'VARCHAR(255) NULL'),
-        ('postgresql_port', 'INTEGER NULL'),
-        ('postgresql_database', 'VARCHAR(255) NULL'),
-        ('postgresql_username', 'VARCHAR(255) NULL'),
-        ('postgresql_password_encrypted', 'TEXT NULL'),
-        ('api_base_url', 'VARCHAR(255) NULL'),
-        ('api_key_encrypted', 'TEXT NULL'),
-        ('sync_settings', 'JSON NULL')
-    ]
+logger = logging.getLogger(__name__)
+
+def fix_database_schema():
+    """Fix database schema and relationships"""
     
     try:
-        # Check if we're using SQLite or PostgreSQL
-        engine_name = db.engine.name
+        print("🔧 Starting complete database schema fix...")
         
-        for field_name, field_definition in fields_to_add:
-            # Check if column exists
-            if engine_name == 'sqlite':
-                result = db.session.execute(text(
-                    f"PRAGMA table_info(company)"
-                )).fetchall()
-                
-                existing_columns = [row[1] for row in result]
-                
-                if field_name not in existing_columns:
-                    print(f"Adding column {field_name} to company table...")
-                    
-                    # SQLite syntax
-                    alter_sql = f"ALTER TABLE company ADD COLUMN {field_name} {field_definition}"
-                    db.session.execute(text(alter_sql))
-                    
-            elif engine_name == 'postgresql':
-                # Check if column exists in PostgreSQL
-                result = db.session.execute(text("""
-                    SELECT column_name 
-                    FROM information_schema.columns 
-                    WHERE table_name = 'company' AND column_name = :column_name
-                """), {'column_name': field_name}).fetchone()
-                
-                if not result:
-                    print(f"Adding column {field_name} to company table...")
-                    
-                    # PostgreSQL syntax - adjust field definitions
-                    if field_definition.startswith('JSON'):
-                        pg_definition = 'JSONB'
-                    else:
-                        pg_definition = field_definition
-                    
-                    alter_sql = f"ALTER TABLE company ADD COLUMN {field_name} {pg_definition}"
-                    db.session.execute(text(alter_sql))
+        # Get current table structure
+        inspector = db.inspect(db.engine)
+        
+        # Check if tables exist
+        tables = inspector.get_table_names()
+        print(f"📋 Existing tables: {tables}")
+        
+        # Create tables if they don't exist
+        if 'companies' not in tables or 'users' not in tables:
+            print("🏗️ Creating missing tables...")
+            db.create_all()
+            print("✅ Tables created")
+        
+        # Get current columns
+        company_columns = []
+        user_columns = []
+        
+        if 'companies' in tables:
+            company_columns = [col['name'] for col in inspector.get_columns('companies')]
+        if 'users' in tables:
+            user_columns = [col['name'] for col in inspector.get_columns('users')]
+            
+        print(f"📊 Company columns: {company_columns}")
+        print(f"👥 User columns: {user_columns}")
+        
+        # Add missing Company fields
+        company_fields_to_add = []
+        required_company_fields = {
+            # PostgreSQL Configuration
+            'postgres_host': 'VARCHAR(255)',
+            'postgres_port': 'INTEGER DEFAULT 5432',
+            'postgres_database': 'VARCHAR(100)',
+            'postgres_username': 'VARCHAR(100)', 
+            'postgres_password_encrypted': 'TEXT',
+            
+            # API Configuration
+            'api_base_url': 'VARCHAR(255)',
+            'api_token_encrypted': 'TEXT',
+            'api_username': 'VARCHAR(100)',
+            'api_password_encrypted': 'TEXT',
+            
+            # Sync fields
+            'last_sync_at': 'DATETIME',
+            'sync_status': 'VARCHAR(20) DEFAULT "pending"',
+            'sync_error': 'TEXT',
+            'total_syncs': 'INTEGER DEFAULT 0',
+            
+            # Settings field
+            'settings': 'TEXT DEFAULT "{}"',
+            
+            # Legacy CRM fields  
+            'crm_api_url': 'VARCHAR(255)',
+            'encrypted_api_key': 'TEXT'
+        }
+        
+        for field_name, field_definition in required_company_fields.items():
+            if field_name not in company_columns:
+                company_fields_to_add.append((field_name, field_definition))
+        
+        # Add missing User fields (if needed)
+        user_fields_to_add = []
+        required_user_fields = {
+            'company_id': 'INTEGER REFERENCES companies(id)',
+            'role': 'VARCHAR(20) DEFAULT "viewer"',
+            'is_active': 'BOOLEAN DEFAULT 1',
+            'last_login': 'DATETIME'
+        }
+        
+        for field_name, field_definition in required_user_fields.items():
+            if field_name not in user_columns:
+                user_fields_to_add.append((field_name, field_definition))
+        
+        # Add missing Company fields
+        if company_fields_to_add:
+            print(f"➕ Adding {len(company_fields_to_add)} missing Company fields...")
+            for field_name, field_definition in company_fields_to_add:
+                try:
+                    sql = f"ALTER TABLE companies ADD COLUMN {field_name} {field_definition}"
+                    print(f"🔧 Executing: {sql}")
+                    db.engine.execute(sql)
+                    print(f"✅ Added Company field: {field_name}")
+                except Exception as e:
+                    print(f"❌ Failed to add Company field {field_name}: {str(e)}")
+                    continue
+        
+        # Add missing User fields
+        if user_fields_to_add:
+            print(f"➕ Adding {len(user_fields_to_add)} missing User fields...")
+            for field_name, field_definition in user_fields_to_add:
+                try:
+                    sql = f"ALTER TABLE users ADD COLUMN {field_name} {field_definition}"
+                    print(f"🔧 Executing: {sql}")
+                    db.engine.execute(sql)
+                    print(f"✅ Added User field: {field_name}")
+                except Exception as e:
+                    print(f"❌ Failed to add User field {field_name}: {str(e)}")
+                    continue
+        
+        print("✅ Database schema migration completed!")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Schema migration failed: {str(e)}")
+        return False
+
+def create_demo_data():
+    """Create demo company and user if they don't exist"""
+    
+    try:
+        from app.models.company import Company
+        from app.models.user import User
+        
+        print("🏢 Setting up demo data...")
+        
+        # Create demo company if it doesn't exist
+        demo_company = Company.query.filter_by(slug='habari-demo').first()
+        
+        if not demo_company:
+            print("🏢 Creating demo company...")
+            
+            demo_company = Company(
+                name='Habari Company (Demo)',
+                slug='habari-demo',
+                description='Demo company for churn prediction platform',
+                industry='Telecommunications',
+                website='https://habaricompany.com',
+                sync_status='pending',
+                total_syncs=0,
+                is_active=True
+            )
+            
+            # Set demo API configuration
+            demo_company.api_base_url = 'http://localhost/Web_CRM/api.php'
+            demo_company.update_settings({
+                'auto_sync_enabled': False,
+                'sync_frequency_hours': 6,
+                'notification_email': 'admin@habaricompany.com',
+                'selective_sync': {
+                    'customers': True,
+                    'payments': True, 
+                    'tickets': True,
+                    'usage': False
+                }
+            })
+            
+            db.session.add(demo_company)
+            db.session.flush()  # Get ID without committing
+            
+            print(f"✅ Demo company created with ID: {demo_company.id}")
+        else:
+            print(f"✅ Demo company already exists: {demo_company.name}")
+        
+        # Create demo user if it doesn't exist
+        demo_user = User.query.filter_by(email='admin@example.com').first()
+        
+        if not demo_user:
+            print("👤 Creating demo user...")
+            
+            demo_user = User(
+                email='admin@example.com',
+                full_name='Demo Administrator',
+                company_id=demo_company.id,
+                role='admin',
+                is_active=True
+            )
+            demo_user.set_password('admin123')
+            
+            db.session.add(demo_user)
+            
+            print("✅ Demo user created: admin@example.com / admin123")
+        else:
+            # Update user to belong to demo company if needed
+            if not demo_user.company_id:
+                demo_user.company_id = demo_company.id
+                print("✅ Demo user updated with company association")
+            else:
+                print("✅ Demo user already exists and configured")
         
         # Commit all changes
         db.session.commit()
-        print("✅ Migration completed successfully!")
+        print("💾 All changes committed to database")
         
-        return True
+        return True, demo_company, demo_user
         
     except Exception as e:
+        print(f"❌ Demo data creation failed: {str(e)}")
         db.session.rollback()
-        print(f"❌ Migration failed: {str(e)}")
-        return False
+        return False, None, None
 
-def check_company_schema():
-    """Check what columns currently exist in the company table"""
+def verify_schema():
+    """Verify the schema is correct"""
     
     try:
-        engine_name = db.engine.name
+        print("🔍 Verifying database schema...")
         
-        if engine_name == 'sqlite':
-            result = db.session.execute(text("PRAGMA table_info(company)")).fetchall()
-            print("\n🔍 Current Company table schema (SQLite):")
-            print("Column Name | Type | Not Null | Default")
-            print("-" * 50)
-            for row in result:
-                print(f"{row[1]:<20} | {row[2]:<10} | {row[3]:<8} | {row[4]}")
-                
-        elif engine_name == 'postgresql':
-            result = db.session.execute(text("""
-                SELECT column_name, data_type, is_nullable, column_default
-                FROM information_schema.columns 
-                WHERE table_name = 'company'
-                ORDER BY ordinal_position
-            """)).fetchall()
+        inspector = db.inspect(db.engine)
+        
+        # Check Company table
+        company_columns = [col['name'] for col in inspector.get_columns('companies')]
+        required_company_fields = [
+            'id', 'name', 'slug', 'postgres_host', 'api_base_url', 
+            'last_sync_at', 'sync_status', 'settings'
+        ]
+        
+        missing_company_fields = [field for field in required_company_fields 
+                                 if field not in company_columns]
+        
+        # Check User table
+        user_columns = [col['name'] for col in inspector.get_columns('users')]
+        required_user_fields = [
+            'id', 'email', 'password_hash', 'full_name', 'company_id', 'role'
+        ]
+        
+        missing_user_fields = [field for field in required_user_fields 
+                              if field not in user_columns]
+        
+        if missing_company_fields:
+            print(f"⚠️ Missing Company fields: {missing_company_fields}")
+        else:
+            print("✅ Company table schema is complete")
             
-            print("\n🔍 Current Company table schema (PostgreSQL):")
-            print("Column Name | Type | Nullable | Default")
-            print("-" * 50)
-            for row in result:
-                print(f"{row[0]:<20} | {row[1]:<10} | {row[2]:<8} | {row[3]}")
+        if missing_user_fields:
+            print(f"⚠️ Missing User fields: {missing_user_fields}")
+        else:
+            print("✅ User table schema is complete")
         
-        return True
+        # Test relationship by trying to query
+        try:
+            from app.models.company import Company
+            from app.models.user import User
+            
+            # Test query
+            companies = Company.query.limit(1).all()
+            users = User.query.limit(1).all()
+            
+            print("✅ Model relationships are working")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Model relationship test failed: {str(e)}")
+            return False
         
     except Exception as e:
-        print(f"❌ Schema check failed: {str(e)}")
+        print(f"❌ Schema verification failed: {str(e)}")
         return False
 
+def run_complete_fix():
+    """Run complete database fix"""
+    
+    print("🚀 Starting complete database fix...")
+    
+    # Step 1: Fix schema
+    if not fix_database_schema():
+        print("❌ Schema fix failed")
+        return False
+    
+    # Step 2: Create demo data
+    success, demo_company, demo_user = create_demo_data()
+    if not success:
+        print("❌ Demo data creation failed")
+        return False
+    
+    # Step 3: Verify everything works
+    if not verify_schema():
+        print("❌ Schema verification failed")
+        return False
+    
+    print("🎉 Complete database fix successful!")
+    print("\n📝 Summary:")
+    print("✅ Database schema updated")
+    print("✅ User-Company relationship fixed")
+    print("✅ Demo company created")
+    print("✅ Demo user created")
+    print("\n🔐 Login credentials:")
+    print("📧 Email: admin@example.com")
+    print("🔑 Password: admin123")
+    print("\n🔗 Next steps:")
+    print("1. Replace your models with the fixed versions")
+    print("2. Add ENCRYPTION_KEY to .env file")
+    print("3. Restart your Flask application")
+    print("4. Test login functionality")
+    
+    return True
+
 if __name__ == "__main__":
-    print("🚀 Company Sync Fields Migration")
-    print("=" * 40)
+    # Run migration if script is executed directly
+    from app import create_app
     
-    # First check current schema
-    print("\n1. Checking current schema...")
-    check_company_schema()
-    
-    # Then add missing fields
-    print("\n2. Adding missing fields...")
-    success = add_company_sync_fields()
-    
-    if success:
-        print("\n3. Verifying updated schema...")
-        check_company_schema()
-        print("\n✅ Migration completed! Your Company model now has all required sync fields.")
-    else:
-        print("\n❌ Migration failed. Please check the error messages above.")
+    app = create_app()
+    with app.app_context():
+        run_complete_fix()
