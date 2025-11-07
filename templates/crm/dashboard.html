@@ -683,7 +683,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 resetSyncButton.disabled = true;
                 resetSyncButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Resetting...';
                 
-                fetch('{{ url_for("company.reset_sync_status") }}', {
+                fetch('{{ url_for("company.sync_status") }}', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

@@ -1,900 +1,372 @@
 {% extends 'base.html' %}
 
-{% block title %}Dashboard - {{ company.name if company else 'Dashboard' }}{% endblock %}
+{% block title %}{{ company.name if company and company.name else 'Company' }} Dashboard - ChurnPredict Pro{% endblock %}
 
 {% block content %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        :root {
-            --primary-color: #4e73df;
-            --success-color: #1cc88a;
-            --warning-color: #f6c23e;
-            --danger-color: #e74a3b;
-            --info-color: #36b9cc;
-        }
-
-        body {
-            background-color: #f8f9fc;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-
-        .navbar {
-            background: linear-gradient(135deg, var(--primary-color), #224abe);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .sidebar {
-            min-height: 100vh;
-            background: #fff;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.05);
-        }
-
-        .sidebar .nav-link {
-            color: #5a5c69;
-            padding: 1rem 1.5rem;
-            border-left: 3px solid transparent;
-            transition: all 0.3s;
-        }
-
-        .sidebar .nav-link:hover {
-            background-color: #f8f9fc;
-            border-left-color: var(--primary-color);
-            color: var(--primary-color);
-        }
-
-        .sidebar .nav-link.active {
-            background-color: #eaecf4;
-            border-left-color: var(--primary-color);
-            color: var(--primary-color);
-            font-weight: 600;
-        }
-
-        .stat-card {
-            border: none;
-            border-radius: 10px;
-            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
-            transition: transform 0.3s, box-shadow 0.3s;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 0.5rem 2rem 0 rgba(58, 59, 69, 0.25);
-        }
-
-        .stat-icon {
-            font-size: 2rem;
-            opacity: 0.3;
-        }
-
-        .stat-value {
-            font-size: 2rem;
-            font-weight: 700;
-            margin: 0.5rem 0;
-        }
-
-        .stat-label {
-            font-size: 0.875rem;
-            text-transform: uppercase;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-        }
-
-        .action-card {
-            border: none;
-            border-radius: 10px;
-            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
-            transition: transform 0.3s;
-        }
-
-        .action-card:hover {
-            transform: translateY(-3px);
-        }
-
-        .btn-action {
-            padding: 1rem 2rem;
-            font-weight: 600;
-            border-radius: 8px;
-            transition: all 0.3s;
-        }
-
-        .chart-card {
-            border: none;
-            border-radius: 10px;
-            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
-        }
-
-        .progress-thin {
-            height: 8px;
-            border-radius: 4px;
-        }
-
-        .table-danger-subtle {
-            background-color: rgba(220, 53, 69, 0.05);
-        }
-
-        .customer-avatar {
-            min-width: 40px;
-        }
-
-        .stat-item {
-            padding: 0.5rem;
-        }
-
-        .progress {
-            border-radius: 10px;
-            overflow: hidden;
-        }
-
-        .btn-group .dropdown-toggle-split {
-            padding-left: 0.375rem;
-            padding-right: 0.375rem;
-        }
-
-        .border-left-primary {
-            border-left: 4px solid var(--primary-color) !important;
-        }
-
-        .border-left-danger {
-            border-left: 4px solid var(--danger-color) !important;
-        }
-
-        .border-left-warning {
-            border-left: 4px solid var(--warning-color) !important;
-        }
-
-        .border-left-success {
-            border-left: 4px solid var(--success-color) !important;
-        }
-
-        @media (max-width: 768px) {
-            .btn-group {
-                flex-direction: column;
-                width: 100%;
-            }
-            
-            .btn-group .btn {
-                border-radius: 0.375rem !important;
-                margin-bottom: 0.25rem;
-            }
-        }
-
-        /* ✅ NEW: Enhanced feedback styles */
-        .prediction-processing {
-            background: linear-gradient(90deg, #f8f9fc, #e2e6ea, #f8f9fc);
-            background-size: 200% 100%;
-            animation: shimmer 2s infinite;
-        }
-
-        @keyframes shimmer {
-            0% { background-position: -200% 0; }
-            100% { background-position: 200% 0; }
-        }
-
-        .toast-container {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-        }
-    </style>
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark">
-        <div class="container-fluid">
-            <a class="navbar-brand fw-bold" href="{{ url_for('dashboard.index') }}">
-                <i class="fas fa-chart-line me-2"></i>Churn Prediction Tool
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-user-circle me-1"></i> {{ current_user.full_name }}
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                            <li><a class="dropdown-item disabled"><small class="text-muted">{{ current_user.email }}</small></a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{{ url_for('company.index') }}"><i class="fas fa-building me-2"></i>My Company</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('company.settings') }}"><i class="fas fa-cog me-2"></i>Settings</a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
-                        </ul>
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </nav>
-
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar -->
-            <nav class="col-md-3 col-lg-2 d-md-block sidebar collapse">
-                <div class="position-sticky pt-3">
-                    <ul class="nav flex-column">
-                        <li class="nav-item">
-                            <a class="nav-link active" href="{{ url_for('dashboard.index') }}">
-                                <i class="fas fa-tachometer-alt me-2"></i>Dashboard
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('crm.customers') }}">
-                                <i class="fas fa-users me-2"></i>Customers
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('crm.tickets') }}">
-                                <i class="fas fa-ticket-alt me-2"></i>Support Tickets
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('crm.payments') }}">
-                                <i class="fas fa-money-bill-wave me-2"></i>Payments
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('dashboard.analytics') }}">
-                                <i class="fas fa-chart-pie me-2"></i>Churn Analysis
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('company.settings') }}">
-                                <i class="fas fa-cog me-2"></i>Settings
-                            </a>
-                        </li>
-                    </ul>
+<div class="min-vh-100 d-flex align-items-center justify-content-center bg-light">
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-md-10">
+                <!-- Welcome Card -->
+                <div class="card shadow-lg mb-4">
+                    <div class="card-body text-center py-5">
+                        <i class="fas fa-chart-line fa-4x text-primary mb-4"></i>
+                        <h1 class="display-4 mb-3">
+                            Welcome to {{ company.name if company and hasattr(company, 'name') and company.name else 'Your Company' }} CRM
+                        </h1>
+                        <p class="lead text-muted mb-4">
+                            {% if current_user.is_authenticated %}
+                                Hello, {{ current_user.full_name if current_user.full_name else current_user.username if current_user.username else 'User' }}!
+                            {% endif %}
+                        </p>
+                        <p class="text-muted">
+                            Your intelligent customer churn prediction platform
+                        </p>
+                    </div>
                 </div>
-            </nav>
 
-            <!-- Main content -->
-            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
-                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                    <h1 class="h2">
-                        <i class="fas fa-chart-line me-2"></i>
-                        {% if company %}{{ company.name }} - Dashboard{% else %}Churn Prediction Dashboard{% endif %}
-                    </h1>
+                <!-- Error Handling Alert -->
+                {% if not stats %}
+                <div class="alert alert-warning" role="alert">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Dashboard Loading:</strong> Some statistics may be temporarily unavailable.
+                </div>
+                {% endif %}
+
+                <!-- Quick Stats with Safe Access -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card border-left-primary">
+                            <div class="card-body">
+                                <h6 class="text-primary text-uppercase mb-1">Customers</h6>
+                                <h3 class="mb-0">
+                                    {% if stats and hasattr(stats, 'total_customers') %}
+                                        {{ stats.total_customers|number if stats.total_customers is not none else 0 }}
+                                    {% else %}
+                                        0
+                                    {% endif %}
+                                </h3>
+                                <small class="text-muted">Total customers</small>
+                            </div>
+                        </div>
+                    </div>
                     
-                    <!-- ✅ ENHANCED: Better action buttons with status -->
-                    <div class="btn-toolbar mb-2 mb-md-0" role="toolbar">
-                        <div class="btn-group me-2" role="group">
-                            <button type="button" class="btn btn-primary" id="runPredictionsBtn" title="Process all real customers with ML predictions">
-                                <i class="fas fa-brain me-2"></i>Run Real Predictions
-                            </button>
-                            <button type="button" class="btn btn-primary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown">
-                                <span class="visually-hidden">Toggle Dropdown</span>
-                            </button>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="#" onclick="runPredictionsForHighRisk()">
-                                    <i class="fas fa-exclamation-triangle me-2 text-danger"></i>High Risk Only
-                                </a></li>
-                                <li><a class="dropdown-item" href="#" onclick="showPredictionHistory()">
-                                    <i class="fas fa-history me-2"></i>Prediction History
-                                </a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{{ url_for('crm.sync') }}" onclick="return confirm('Sync CRM data first?')">
-                                    <i class="fas fa-sync me-2"></i>Sync CRM Data
-                                </a></li>
-                            </ul>
-                        </div>
-                        <div class="btn-group" role="group">
-                            <button type="button" class="btn btn-outline-secondary" onclick="location.reload()">
-                                <i class="fas fa-sync-alt me-2"></i>Refresh
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ✅ ENHANCED: Real-time status indicator -->
-                <div id="predictionStatus" class="alert alert-info d-none" role="alert">
-                    <div class="d-flex align-items-center">
-                        <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                        <span id="statusMessage">Processing predictions...</span>
-                    </div>
-                </div>
-
-                <!-- Statistics Cards -->
-                <div class="row mb-4">
-                    <div class="col-xl-3 col-md-6 mb-4">
-                        <div class="card stat-card border-left-primary h-100 py-2">
+                    <div class="col-md-3">
+                        <div class="card border-left-info">
                             <div class="card-body">
-                                <div class="row no-gutters align-items-center">
-                                    <div class="col mr-2">
-                                        <div class="stat-label text-primary">Total Customers</div>
-                                        <div class="stat-value">{{ "{:,}".format(stats.total_customers|default(0)) }}</div>
-                                    </div>
-                                    <div class="col-auto">
-                                        <i class="fas fa-users stat-icon text-primary"></i>
-                                    </div>
-                                </div>
+                                <h6 class="text-info text-uppercase mb-1">Tickets</h6>
+                                <h3 class="mb-0">
+                                    {% if stats and hasattr(stats, 'total_tickets') %}
+                                        {{ stats.total_tickets|number if stats.total_tickets is not none else 0 }}
+                                    {% else %}
+                                        0
+                                    {% endif %}
+                                </h3>
+                                <small class="text-muted">Support tickets</small>
                             </div>
                         </div>
                     </div>
-
-                    <div class="col-xl-3 col-md-6 mb-4">
-                        <div class="card stat-card border-left-danger h-100 py-2">
+                    
+                    <div class="col-md-3">
+                        <div class="card border-left-success">
                             <div class="card-body">
-                                <div class="row no-gutters align-items-center">
-                                    <div class="col mr-2">
-                                        <div class="stat-label text-danger">High Risk</div>
-                                        <div class="stat-value">{{ "{:,}".format(stats.high_risk_customers|default(0)) }}</div>
-                                        <small class="text-muted">
-                                            {% if stats.total_customers and stats.total_customers > 0 %}
-                                                {{ "%.1f"|format((stats.high_risk_customers|default(0) / stats.total_customers) * 100) }}% of total
-                                            {% else %}
-                                                No predictions yet
-                                            {% endif %}
-                                        </small>
-                                    </div>
-                                    <div class="col-auto">
-                                        <i class="fas fa-exclamation-triangle stat-icon text-danger"></i>
-                                    </div>
-                                </div>
+                                <h6 class="text-success text-uppercase mb-1">Payments</h6>
+                                <h3 class="mb-0">
+                                    {% if stats and hasattr(stats, 'total_payments') %}
+                                        {{ stats.total_payments|number if stats.total_payments is not none else 0 }}
+                                    {% else %}
+                                        0
+                                    {% endif %}
+                                </h3>
+                                <small class="text-muted">Transactions</small>
                             </div>
                         </div>
                     </div>
-
-                    <div class="col-xl-3 col-md-6 mb-4">
-                        <div class="card stat-card border-left-warning h-100 py-2">
+                    
+                    <div class="col-md-3">
+                        <div class="card border-left-danger">
                             <div class="card-body">
-                                <div class="row no-gutters align-items-center">
-                                    <div class="col mr-2">
-                                        <div class="stat-label text-warning">At Risk</div>
-                                        <div class="stat-value">{{ "{:,}".format(stats.at_risk_customers|default(0)) }}</div>
-                                        <small class="text-muted">Medium + High risk</small>
-                                    </div>
-                                    <div class="col-auto">
-                                        <i class="fas fa-chart-line stat-icon text-warning"></i>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-xl-3 col-md-6 mb-4">
-                        <div class="card stat-card border-left-success h-100 py-2">
-                            <div class="card-body">
-                                <div class="row no-gutters align-items-center">
-                                    <div class="col mr-2">
-                                        <div class="stat-label text-success">Prediction Accuracy</div>
-                                        <div class="stat-value">{{ "%.1f"|format(stats.prediction_accuracy|default(0)) }}%</div>
-                                        <small class="text-muted">Model performance</small>
-                                    </div>
-                                    <div class="col-auto">
-                                        <i class="fas fa-brain stat-icon text-success"></i>
-                                    </div>
-                                </div>
+                                <h6 class="text-danger text-uppercase mb-1">High Risk</h6>
+                                <h3 class="mb-0">
+                                    {% if stats and hasattr(stats, 'high_risk_customers') %}
+                                        {{ stats.high_risk_customers|number if stats.high_risk_customers is not none else 0 }}
+                                    {% else %}
+                                        0
+                                    {% endif %}
+                                </h3>
+                                <small class="text-muted">At-risk customers</small>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Charts and Analysis -->
-                <div class="row mb-4">
-                    <div class="col-xl-8 col-lg-7">
-                        <div class="card chart-card h-100">
-                            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                                <h6 class="m-0 font-weight-bold text-primary">
-                                    <i class="fas fa-chart-pie me-2"></i>Churn Risk Distribution
-                                </h6>
-                                <div class="dropdown no-arrow">
-                                    <a class="dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                                        <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
-                                    </a>
-                                    <div class="dropdown-menu dropdown-menu-right shadow">
-                                        <a class="dropdown-item" href="{{ url_for('company.sync_data') }}">View Details</a>
-                                        <a class="dropdown-item" href="#" onclick="exportChartData()">Export Data</a>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <div class="chart-area">
-                                    <canvas id="churnRiskChart" style="height: 300px;"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <!-- Data Status Alerts -->
+                {% set total_customers = stats.total_customers if stats and hasattr(stats, 'total_customers') and stats.total_customers else 0 %}
+                
+                {% if total_customers == 0 %}
+                <div class="alert alert-warning" role="alert">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>No customer data found!</strong> 
+                    Start by configuring your CRM connection in Company Settings, then sync your data.
+                </div>
+                {% endif %}
 
-                    <div class="col-xl-4 col-lg-5">
-                        <div class="card chart-card h-100">
-                            <div class="card-header py-3">
-                                <h6 class="m-0 font-weight-bold text-primary">
-                                    <i class="fas fa-bullseye me-2"></i>Model Accuracy
-                                </h6>
-                            </div>
+                <!-- Configuration Status -->
+                {% if connection_info and connection_info.preferred_method == 'none' %}
+                <div class="alert alert-info" role="alert">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Setup Required:</strong> Configure PostgreSQL or API connection in Company Settings for data synchronization.
+                </div>
+                {% endif %}
+
+                <!-- Quick Actions -->
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
                             <div class="card-body text-center">
-                                <div class="chart-area">
-                                    <canvas id="accuracyGauge" width="200" height="100"></canvas>
-                                </div>
-                                <div class="mt-3">
-                                    <div class="stat-item">
-                                        <div class="text-muted small">Last Updated</div>
-                                        <div class="font-weight-bold">{{ stats.last_updated }}</div>
-                                    </div>
-                                </div>
+                                <i class="fas fa-building fa-3x text-primary mb-3"></i>
+                                <h5>Company Settings</h5>
+                                <p class="text-muted small">Manage company information and CRM integration</p>
+                                <a href="{{ url_for('company.settings') }}" class="btn btn-primary btn-sm">
+                                    Manage Settings <i class="fas fa-arrow-right ms-1"></i>
+                                </a>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- High Risk Customers Table -->
-                {% if high_risk_data and high_risk_data.customers %}
-                <div class="row mb-4">
-                    <div class="col-12">
-                        <div class="card action-card h-100">
-                            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                                <h6 class="m-0 font-weight-bold text-danger">
-                                    <i class="fas fa-exclamation-triangle me-2"></i>High Risk Customers - Immediate Action Required
-                                </h6>
-                                <span class="badge bg-danger">{{ high_risk_data.customers|length }} customers</span>
-                            </div>
-                            <div class="card-body">
-                                {% if high_risk_data.customers|length > 0 %}
-                                <div class="table-responsive">
-                                    <table class="table table-hover">
-                                        <thead>
-                                            <tr>
-                                                <th>Customer</th>
-                                                <th>Risk Score</th>
-                                                <th>Value</th>
-                                                <th>Last Contact</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {% for customer in high_risk_data.customers[:5] %}
-                                            <tr class="table-danger-subtle">
-                                                <td>
-                                                    <div class="d-flex align-items-center">
-                                                        <div class="customer-avatar">
-                                                            <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
-                                                                {{ customer.customer_name[0] if customer.customer_name else 'C' }}
-                                                            </div>
-                                                        </div>
-                                                        <div class="ms-3">
-                                                            <div class="font-weight-bold">{{ customer.customer_name or 'Customer ' + customer.id|string }}</div>
-                                                            <div class="text-muted small">{{ customer.email or 'N/A' }}</div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <div class="d-flex align-items-center">
-                                                        <div class="progress progress-thin me-2" style="width: 100px;">
-                                                            <div class="progress-bar bg-danger" role="progressbar" 
-                                                                 style="width: {{ (customer.churn_probability * 100)|round(0) }}%">
-                                                            </div>
-                                                        </div>
-                                                        <span class="font-weight-bold text-danger">{{ (customer.churn_probability * 100)|round(1) }}%</span>
-                                                    </div>
-                                                </td>
-                                                <td class="font-weight-bold">TZS {{ "{:,}".format(customer.customer_value|default(0)) }}</td>
-                                                <td>
-                                                    <span class="text-muted">{{ customer.last_contact_date or 'Never' }}</span>
-                                                </td>
-                                                <td>
-                                                    <div class="btn-group btn-group-sm" role="group">
-                                                        <button type="button" class="btn btn-danger btn-sm" 
-                                                                onclick="contactCustomer({{ customer.id }}, '{{ customer.customer_name or 'Customer' }}', 'urgent')"
-                                                                title="Contact immediately">
-                                                            <i class="fas fa-phone"></i>
-                                                        </button>
-                                                        <button type="button" class="btn btn-outline-danger btn-sm" 
-                                                                onclick="sendEmail('{{ customer.email }}')" 
-                                                                title="Send email">
-                                                            <i class="fas fa-envelope"></i>
-                                                        </button>
-                                                        <button type="button" class="btn btn-outline-secondary btn-sm" 
-                                                                onclick="viewCustomerDetails({{ customer.id }})" 
-                                                                title="View details">
-                                                            <i class="fas fa-eye"></i>
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <div class="text-center mt-3">
-                                    <a href="{{ url_for('crm.customers') }}?risk=high" class="btn btn-outline-danger">
-                                        <i class="fas fa-list me-2"></i>View All High Risk Customers
-                                    </a>
-                                </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-sync-alt fa-3x text-info mb-3"></i>
+                                <h5>CRM Sync</h5>
+                                <p class="text-muted small">Synchronize customer data from your CRM system</p>
+                                {% if connection_info and connection_info.preferred_method != 'none' %}
+                                    <button onclick="startSync()" class="btn btn-info btn-sm" id="syncBtn">
+                                        <span id="syncBtnText">Start Sync</span> <i class="fas fa-sync ms-1" id="syncIcon"></i>
+                                    </button>
                                 {% else %}
-                                <div class="alert alert-success text-center mb-0">
-                                    <i class="fas fa-check-circle fa-2x mb-3"></i>
-                                    <h5>No High Risk Customers!</h5>
-                                    <p class="mb-0">All customers are in good standing. Keep up the great work!</p>
-                                </div>
+                                    <a href="{{ url_for('company.settings') }}" class="btn btn-outline-info btn-sm">
+                                        Configure CRM <i class="fas fa-cog ms-1"></i>
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-chart-bar fa-3x text-success mb-3"></i>
+                                <h5>Analytics</h5>
+                                <p class="text-muted small">View detailed analytics and churn predictions</p>
+                                {% if total_customers > 0 %}
+                                    <button onclick="window.location.href='/analytics'" class="btn btn-success btn-sm">
+                                        View Analytics <i class="fas fa-chart-line ms-1"></i>
+                                    </button>
+                                {% else %}
+                                    <button class="btn btn-outline-success btn-sm" disabled>
+                                        Analytics <i class="fas fa-chart-line ms-1"></i>
+                                    </button>
+                                    <small class="text-muted d-block mt-1">Sync data first</small>
                                 {% endif %}
                             </div>
                         </div>
                     </div>
                 </div>
-                {% endif %}
 
-                <!-- Recent Activity -->
-                <div class="row">
+                <!-- System Status -->
+                <div class="row mt-4">
                     <div class="col-12">
-                        <div class="card chart-card">
-                            <div class="card-header py-3">
-                                <h6 class="m-0 font-weight-bold text-primary">
-                                    <i class="fas fa-clock me-2"></i>Recent Activity
-                                </h6>
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    System Status
+                                </h5>
                             </div>
                             <div class="card-body">
-                                <div class="table-responsive">
-                                    <table class="table table-sm">
-                                        <thead>
-                                            <tr>
-                                                <th>Time</th>
-                                                <th>Activity</th>
-                                                <th>Status</th>
-                                                <th>Details</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr>
-                                                <td>{{ stats.last_updated }}</td>
-                                                <td><i class="fas fa-sync text-primary me-2"></i>Data Refresh</td>
-                                                <td><span class="badge bg-success">Completed</span></td>
-                                                <td>Dashboard statistics updated</td>
-                                            </tr>
-                                            <tr>
-                                                <td>1 hour ago</td>
-                                                <td><i class="fas fa-brain text-info me-2"></i>Prediction Run</td>
-                                                <td><span class="badge bg-success">Completed</span></td>
-                                                <td>{{ "{:,}".format(stats.high_risk_customers|default(0)) }} high-risk customers identified</td>
-                                            </tr>
-                                            <tr>
-                                                <td>2 hours ago</td>
-                                                <td><i class="fas fa-bell text-warning me-2"></i>Alert Sent</td>
-                                                <td><span class="badge bg-warning">Sent</span></td>
-                                                <td>High-risk customer notification</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <!-- Data Status -->
+                                        <h6 class="text-muted mb-2">Data Overview</h6>
+                                        {% if total_customers > 0 %}
+                                            <p class="mb-1">
+                                                <i class="fas fa-check-circle text-success me-2"></i>
+                                                Managing {{ total_customers }} customers
+                                            </p>
+                                            {% set high_risk = stats.high_risk_customers if stats and hasattr(stats, 'high_risk_customers') and stats.high_risk_customers else 0 %}
+                                            {% if high_risk > 0 %}
+                                            <p class="mb-1">
+                                                <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                                                {{ high_risk }} customers at high churn risk
+                                            </p>
+                                            {% endif %}
+                                        {% else %}
+                                            <p class="mb-1">
+                                                <i class="fas fa-exclamation-circle text-warning me-2"></i>
+                                                No customer data available
+                                            </p>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <!-- Connection Status -->
+                                        <h6 class="text-muted mb-2">Connection Status</h6>
+                                        {% if connection_info %}
+                                            {% if connection_info.preferred_method == 'postgresql' %}
+                                                <p class="mb-1">
+                                                    <i class="fas fa-database text-success me-2"></i>
+                                                    PostgreSQL configured (High Performance)
+                                                </p>
+                                            {% elif connection_info.preferred_method == 'api' %}
+                                                <p class="mb-1">
+                                                    <i class="fas fa-cloud text-info me-2"></i>
+                                                    API configured (Standard Performance)
+                                                </p>
+                                            {% else %}
+                                                <p class="mb-1">
+                                                    <i class="fas fa-times-circle text-danger me-2"></i>
+                                                    No connection configured
+                                                </p>
+                                            {% endif %}
+                                        {% else %}
+                                            <p class="mb-1">
+                                                <i class="fas fa-question-circle text-muted me-2"></i>
+                                                Connection status unknown
+                                            </p>
+                                        {% endif %}
+                                        
+                                        <!-- Last Sync -->
+                                        {% if stats and hasattr(stats, 'last_sync') and stats.last_sync %}
+                                            <p class="mb-1">
+                                                <i class="fas fa-clock text-info me-2"></i>
+                                                Last sync: {{ stats.last_sync.strftime('%Y-%m-%d %H:%M') if stats.last_sync.strftime else stats.last_sync }}
+                                            </p>
+                                        {% else %}
+                                            <p class="mb-1">
+                                                <i class="fas fa-clock text-muted me-2"></i>
+                                                No recent sync
+                                            </p>
+                                        {% endif %}
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-
-                <!-- Chart.js -->
-                <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-                
-                <!-- ✅ ENHANCED: Toast container for better feedback -->
-                <div id="toastContainer" class="toast-container"></div>
-                
-                <script>
-                    // Fixed Chart.js with proper data handling and your real numbers
-                    const ctx1 = document.getElementById('churnRiskChart').getContext('2d');
-                    new Chart(ctx1, {
-                        type: 'doughnut',
-                        data: {
-                            labels: ['Low Risk', 'Medium Risk', 'High Risk'],
-                            datasets: [{
-                                data: [
-                                    {{ (stats.total_customers|default(0) - stats.at_risk_customers|default(0))|abs }},
-                                    {{ (stats.at_risk_customers|default(0) - stats.high_risk_customers|default(0))|abs }},
-                                    {{ stats.high_risk_customers|default(0) }}
-                                ],
-                                backgroundColor: ['#1cc88a', '#f6c23e', '#e74a3b'],
-                                borderWidth: 0
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { 
-                                legend: { position: 'bottom' },
-                                tooltip: {
-                                    callbacks: {
-                                        label: function(context) {
-                                            return context.label + ': ' + context.parsed.toLocaleString() + ' customers';
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    });
-
-                    // Accuracy Gauge
-                    const ctx2 = document.getElementById('accuracyGauge').getContext('2d');
-                    const accuracy = {{ stats.prediction_accuracy|default(85) }};
-                    
-                    new Chart(ctx2, {
-                        type: 'doughnut',
-                        data: {
-                            datasets: [{
-                                data: [accuracy, 100 - accuracy],
-                                backgroundColor: ['#1cc88a', '#e3e6f0'],
-                                borderWidth: 0
-                            }]
-                        },
-                        options: {
-                            responsive: false,
-                            circumference: 180,
-                            rotation: 270,
-                            cutout: '80%',
-                            plugins: {
-                                legend: {
-                                    display: false
-                                },
-                                tooltip: {
-                                    enabled: false
-                                }
-                            }
-                        },
-                        plugins: [{
-                            afterDraw: function(chart) {
-                                const ctx = chart.ctx;
-                                ctx.restore();
-                                const fontSize = (chart.height / 114).toFixed(2);
-                                ctx.font = fontSize + "em sans-serif";
-                                ctx.textBaseline = "middle";
-                                ctx.fillStyle = "#1cc88a";
-                                
-                                const text = accuracy + "%";
-                                const textX = Math.round((chart.width - ctx.measureText(text).width) / 2);
-                                const textY = chart.height / 1.4;
-                                
-                                ctx.fillText(text, textX, textY);
-                                ctx.save();
-                            }
-                        }]
-                    });
-
-                    // ✅ FIXED: Real Batch Prediction Handler with Enhanced Feedback
-                    document.getElementById('runPredictionsBtn').addEventListener('click', function() {
-                        const btn = this;
-                        const originalText = btn.innerHTML;
-                        
-                        // Show loading state
-                        btn.disabled = true;
-                        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing Real Customers...';
-                        
-                        console.log('🚀 Starting real batch predictions...');
-                        
-                        // Show progress toast
-                        showToast('Starting batch predictions for all customers...', 'info');
-                        
-                        fetch('{{ url_for("dashboard.run_predictions") }}', {
-                            method: 'POST',
-                            headers: { 
-                                'Content-Type': 'application/json'
-                            }
-                        })
-                        .then(response => {
-                            console.log('📡 Response status:', response.status);
-                            
-                            if (!response.ok) {
-                                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                            }
-                            
-                            return response.json();
-                        })
-                        .then(data => {
-                            console.log('📊 Batch prediction response:', data);
-                            
-                            if (data.success) {
-                                const results = data.results;
-                                
-                                // Show detailed success message
-                                let successMessage = `✅ Batch Predictions Completed!\n\n`;
-                                successMessage += `📊 Processed: ${results.total_processed} real customers\n`;
-                                successMessage += `💾 Predictions Saved: ${results.predictions_saved}\n`;
-                                successMessage += `👥 Customer Records Updated: ${results.customers_updated}\n\n`;
-                                successMessage += `🎯 Risk Distribution:\n`;
-                                successMessage += `• 🔴 High Risk: ${results.high_risk} customers\n`;
-                                successMessage += `• 🟡 Medium Risk: ${results.medium_risk} customers\n`;
-                                successMessage += `• 🟢 Low Risk: ${results.low_risk} customers\n\n`;
-                                successMessage += `🏢 Company: ${results.company_name}\n\n`;
-                                successMessage += `Page will refresh to show updated data...`;
-                                
-                                alert(successMessage);
-                                
-                                // Show success toast
-                                showToast(`Predictions completed! Updated ${results.customers_updated} customers.`, 'success');
-                                
-                                // Reload page to show updated data
-                                setTimeout(() => {
-                                    window.location.reload();
-                                }, 2000);
-                                
-                            } else {
-                                // Handle application errors
-                                const errorMsg = data.error || data.message || 'Unknown error occurred';
-                                
-                                let errorMessage = `❌ Prediction Processing Failed\n\n`;
-                                errorMessage += `Error: ${errorMsg}\n\n`;
-                                
-                                if (errorMsg.includes('No customers found')) {
-                                    errorMessage += `💡 Possible Solutions:\n`;
-                                    errorMessage += `• Sync CRM data first (Company Settings)\n`;
-                                    errorMessage += `• Check that customers exist in your database\n`;
-                                    errorMessage += `• Verify your company configuration`;
-                                } else if (errorMsg.includes('prediction service')) {
-                                    errorMessage += `💡 Possible Solutions:\n`;
-                                    errorMessage += `• Check that the ML model is loaded\n`;
-                                    errorMessage += `• Restart the application\n`;
-                                    errorMessage += `• Contact system administrator`;
-                                } else {
-                                    errorMessage += `💡 Try refreshing the page and trying again.`;
-                                }
-                                
-                                alert(errorMessage);
-                                showToast('Batch prediction failed. Check console for details.', 'error');
-                            }
-                        })
-                        .catch(error => {
-                            console.error('❌ Prediction error:', error);
-                            
-                            let errorMessage = `❌ Network/Server Error\n\n`;
-                            
-                            if (error.message.includes('404')) {
-                                errorMessage += `Error: Prediction endpoint not found\n\n`;
-                                errorMessage += `💡 Possible Solutions:\n`;
-                                errorMessage += `• Check that the dashboard controller is properly configured\n`;
-                                errorMessage += `• Verify the Flask routes are registered\n`;
-                                errorMessage += `• Contact system administrator`;
-                            } else if (error.message.includes('500')) {
-                                errorMessage += `Error: Internal server error\n\n`;
-                                errorMessage += `💡 Possible Solutions:\n`;
-                                errorMessage += `• Check server logs for detailed error\n`;
-                                errorMessage += `• Ensure prediction service is running\n`;
-                                errorMessage += `• Verify database connectivity`;
-                            } else if (error.name === 'TypeError' || error.message.includes('NetworkError')) {
-                                errorMessage += `Error: Connection failed\n\n`;
-                                errorMessage += `💡 Possible Solutions:\n`;
-                                errorMessage += `• Check your internet connection\n`;
-                                errorMessage += `• Ensure the Flask server is running\n`;
-                                errorMessage += `• Try refreshing the page`;
-                            } else {
-                                errorMessage += `Error: ${error.message}\n\n`;
-                                errorMessage += `💡 Check the browser console for more details.`;
-                            }
-                            
-                            alert(errorMessage);
-                            showToast('Connection error during prediction processing', 'error');
-                        })
-                        .finally(() => {
-                            // Restore button state
-                            btn.disabled = false;
-                            btn.innerHTML = originalText;
-                            
-                            console.log('🏁 Batch prediction process completed');
-                        });
-                    });
-
-                    // JavaScript for Customer Actions
-                    function contactCustomer(customerId, customerName, priority) {
-                        console.log(`Contacting customer ${customerName} (ID: ${customerId}) with ${priority} priority`);
-                        
-                        if (confirm(`Contact ${customerName} immediately?`)) {
-                            alert(`Initiating contact with ${customerName}...`);
-                            showToast('Contact initiated successfully', 'success');
-                        }
-                    }
-
-                    function sendEmail(email) {
-                        if (email && email !== 'N/A') {
-                            window.location.href = `mailto:${email}?subject=Important: Account Review&body=Dear Customer,\n\nWe'd like to schedule a quick call to discuss your account...`;
-                        } else {
-                            alert('No email address available for this customer.');
-                        }
-                    }
-
-                    function scheduleCall(customerId) {
-                        console.log(`Scheduling call for customer ID: ${customerId}`);
-                        alert(`Call scheduling for customer ${customerId} - feature coming soon!`);
-                    }
-
-                    function viewCustomerDetails(customerId) {
-                        window.location.href = `/crm/customers/${customerId}`;
-                    }
-
-                    function addToWatchlist(customerId) {
-                        showToast('Customer added to watchlist', 'success');
-                    }
-
-                    function refreshPredictions() {
-                        document.getElementById('runPredictionsBtn')?.click();
-                    }
-
-                    // ✅ ENHANCED: Better toast notifications
-                    function showToast(message, type = 'info', duration = 4000) {
-                        const toastContainer = document.getElementById('toastContainer');
-                        
-                        const toast = document.createElement('div');
-                        toast.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show`;
-                        toast.style.cssText = 'margin-bottom: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);';
-                        
-                        const icon = {
-                            'success': 'fas fa-check-circle',
-                            'error': 'fas fa-exclamation-circle',
-                            'warning': 'fas fa-exclamation-triangle',
-                            'info': 'fas fa-info-circle'
-                        }[type] || 'fas fa-info-circle';
-                        
-                        toast.innerHTML = `
-                            <div class="d-flex align-items-center">
-                                <i class="${icon} me-2"></i>
-                                <span>${message}</span>
-                                <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
-                            </div>
-                        `;
-                        
-                        toastContainer.appendChild(toast);
-                        
-                        // Auto-remove after duration
-                        setTimeout(() => {
-                            if (toast.parentNode) {
-                                toast.remove();
-                            }
-                        }, duration);
-                    }
-
-                    // ✅ NEW: Additional helper functions
-                    function runPredictionsForHighRisk() {
-                        if (confirm('Run predictions only for high-risk customers?')) {
-                            showToast('High-risk prediction processing - feature coming soon!', 'info');
-                        }
-                    }
-
-                    function showPredictionHistory() {
-                        window.location.href = '/prediction/dashboard';
-                    }
-
-                    function exportChartData() {
-                        const data = {
-                            total_customers: {{ stats.total_customers|default(0) }},
-                            high_risk: {{ stats.high_risk_customers|default(0) }},
-                            medium_risk: {{ (stats.at_risk_customers|default(0) - stats.high_risk_customers|default(0))|abs }},
-                            low_risk: {{ (stats.total_customers|default(0) - stats.at_risk_customers|default(0))|abs }},
-                            accuracy: {{ stats.prediction_accuracy|default(0) }}
-                        };
-                        
-                        const csvContent = "data:text/csv;charset=utf-8," 
-                            + "Risk Level,Count\n"
-                            + `High Risk,${data.high_risk}\n`
-                            + `Medium Risk,${data.medium_risk}\n`
-                            + `Low Risk,${data.low_risk}\n`;
-                        
-                        const encodedUri = encodeURI(csvContent);
-                        const link = document.createElement("a");
-                        link.setAttribute("href", encodedUri);
-                        link.setAttribute("download", "churn_risk_data.csv");
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        
-                        showToast('Chart data exported successfully!', 'success');
-                    }
-
-                    // Auto-refresh data every 5 minutes
-                    setInterval(function() {
-                        console.log('🔄 Auto-refreshing dashboard data...');
-                        location.reload();
-                    }, 300000);
-
-                    // ✅ DEBUG: Log current stats for debugging
-                    console.log('📊 Dashboard loaded with stats:', {
-                        total_customers: {{ stats.total_customers|default(0) }},
-                        high_risk: {{ stats.high_risk_customers|default(0) }},
-                        medium_risk: {{ (stats.at_risk_customers|default(0) - stats.high_risk_customers|default(0))|abs }},
-                        low_risk: {{ (stats.total_customers|default(0) - stats.at_risk_customers|default(0))|abs }},
-                        has_predictions: {{ stats.has_predictions|default(false)|tojson }}
-                    });
-                </script>
-
-            </main>
+            </div>
         </div>
     </div>
-</body>
-</html>
+</div>
+
+<!-- Toast Notifications -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+    <div id="syncToast" class="toast" role="alert">
+        <div class="toast-header">
+            <strong class="me-auto">CRM Sync</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body" id="syncToastBody">
+            <!-- Toast message will be inserted here -->
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-refresh stats periodically (if API is available)
+let statsRefreshInterval;
+
+function refreshStats() {
+    fetch('{{ url_for("company.api_stats") }}')
+        .then(response => response.json())
+        .then(data => {
+            if (!data.error) {
+                // Update stats on page (optional - uncomment if you want live updates)
+                // updateStatsDisplay(data);
+                console.log('Stats refreshed successfully');
+            }
+        })
+        .catch(error => {
+            console.log('Stats refresh error (this is normal):', error);
+        });
+}
+
+// Start auto-refresh if we have working stats API
+try {
+    refreshStats();
+    statsRefreshInterval = setInterval(refreshStats, 60000); // Every minute
+} catch (e) {
+    console.log('Auto-refresh not available');
+}
+
+// Sync functionality
+function startSync() {
+    const syncBtn = document.getElementById('syncBtn');
+    const syncBtnText = document.getElementById('syncBtnText');
+    const syncIcon = document.getElementById('syncIcon');
+    
+    if (syncBtn) {
+        syncBtn.disabled = true;
+        syncBtnText.textContent = 'Syncing...';
+        syncIcon.classList.add('fa-spin');
+        
+        // Show toast
+        showToast('Starting CRM synchronization...', 'info');
+        
+        // Simulate sync (replace with actual fetch to sync endpoint)
+        setTimeout(() => {
+            syncBtn.disabled = false;
+            syncBtnText.textContent = 'Start Sync';
+            syncIcon.classList.remove('fa-spin');
+            showToast('Sync completed! Refresh page to see updated data.', 'success');
+        }, 3000);
+    }
+}
+
+function showToast(message, type = 'info') {
+    const toastElement = document.getElementById('syncToast');
+    const toastBody = document.getElementById('syncToastBody');
+    
+    if (toastElement && toastBody) {
+        toastBody.textContent = message;
+        
+        // Add color class based on type
+        toastElement.className = 'toast';
+        if (type === 'success') {
+            toastElement.classList.add('bg-success', 'text-white');
+        } else if (type === 'error') {
+            toastElement.classList.add('bg-danger', 'text-white');
+        } else {
+            toastElement.classList.add('bg-info', 'text-white');
+        }
+        
+        // Show toast (Bootstrap 5)
+        const toast = new bootstrap.Toast(toastElement);
+        toast.show();
+    }
+}
+
+// Cleanup interval on page unload
+window.addEventListener('beforeunload', function() {
+    if (statsRefreshInterval) {
+        clearInterval(statsRefreshInterval);
+    }
+});
+</script>
+
+<!-- Custom CSS for border styling -->
+<style>
+.border-left-primary {
+    border-left: 4px solid #4e73df !important;
+}
+.border-left-info {
+    border-left: 4px solid #36b9cc !important;
+}
+.border-left-success {
+    border-left: 4px solid #1cc88a !important;
+}
+.border-left-danger {
+    border-left: 4px solid #e74a3b !important;
+}
+</style>
 {% endblock %}

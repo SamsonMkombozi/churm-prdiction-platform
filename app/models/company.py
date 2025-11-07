@@ -1,8 +1,8 @@
 """
-Temporary Company Model - Compatible with existing database
-Replace app/models/company.py with this version temporarily
+FIXED Company Model - Prevents Recursion Issues
+app/models/company.py
 
-This version only includes columns that exist in your current database
+Replace your Company model with this version to fix the recursion error.
 """
 
 from app.extensions import db
@@ -13,11 +13,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 class Company(db.Model):
-    """Company model compatible with existing database schema"""
+    """Company model with safe configuration handling - NO RECURSION"""
     
     __tablename__ = 'companies'
     
-    # Basic company fields (these should exist)
+    # ✅ Basic company fields (these should always exist)
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     slug = db.Column(db.String(50), unique=True, nullable=False)
@@ -32,11 +32,17 @@ class Company(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Sync-related fields (these might exist)
+    # Sync-related fields
     last_sync_at = db.Column(db.DateTime)
     sync_status = db.Column(db.String(50), default='never')
     sync_error = db.Column(db.Text)
     total_syncs = db.Column(db.Integer, default=0)
+    
+    # ✅ OPTIONAL: Configuration columns (may or may not exist)
+    # These are defined here but we'll access them safely
+    # postgresql_host = db.Column(db.String(255))  # May not exist
+    # postgresql_port = db.Column(db.Integer, default=5432)  # May not exist
+    # etc.
     
     # Relationships
     users = db.relationship('User', backref='company', lazy=True)
@@ -46,93 +52,166 @@ class Company(db.Model):
     def __repr__(self):
         return f'<Company {self.name}>'
     
-    # Safe property getters (return None if column doesn't exist)
-    @property
-    def logo_url(self):
-        return getattr(self, '_logo_url', None)
+    # ✅ SAFE CONFIGURATION METHODS (NO RECURSION)
     
-    @property
-    def postgresql_host(self):
-        return getattr(self, '_postgresql_host', None)
+    def get_config(self, key, default=None):
+        """
+        SAFE method to get configuration values without recursion
+        """
+        try:
+            # Method 1: Try direct database column access
+            if hasattr(self.__class__, key):
+                # Check if it's a real column (not a property)
+                column = getattr(self.__class__, key)
+                if hasattr(column, 'type'):  # It's a SQLAlchemy column
+                    value = getattr(self, key, None)
+                    if value is not None:
+                        return value
+            
+            # Method 2: Try temporary cache
+            if hasattr(self, '_config_cache') and self._config_cache and key in self._config_cache:
+                return self._config_cache[key]
+            
+            # Method 3: Try settings JSON
+            settings = self._get_settings_dict_safe()
+            if key in settings:
+                return settings[key]
+            
+            return default
+            
+        except Exception as e:
+            logger.warning(f"Error getting config {key}: {e}")
+            return default
     
-    @property
-    def postgresql_port(self):
-        return getattr(self, '_postgresql_port', 5432)
+    def set_config(self, key, value):
+        """
+        SAFE method to set configuration values
+        """
+        try:
+            # Method 1: Try to set as database column
+            if hasattr(self.__class__, key):
+                column = getattr(self.__class__, key)
+                if hasattr(column, 'type'):  # It's a real SQLAlchemy column
+                    setattr(self, key, value)
+                    return True
+            
+            # Method 2: Store in temporary cache
+            if not hasattr(self, '_config_cache'):
+                self._config_cache = {}
+            self._config_cache[key] = value
+            logger.info(f"Stored {key} in config cache")
+            return True
+            
+        except AttributeError as e:
+            # Method 3: Store in temporary cache as fallback
+            if not hasattr(self, '_config_cache'):
+                self._config_cache = {}
+            self._config_cache[key] = value
+            logger.warning(f"Stored {key} in config cache due to AttributeError: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Error setting config {key}: {e}")
+            return False
     
-    @property
-    def postgresql_database(self):
-        return getattr(self, '_postgresql_database', None)
+    def _get_settings_dict_safe(self):
+        """Safely get settings dictionary"""
+        try:
+            # Try to get from settings column
+            if hasattr(self, 'settings') and self.settings:
+                return json.loads(self.settings)
+            
+            # Try from cache
+            if hasattr(self, '_settings_cache'):
+                return self._settings_cache
+            
+            return {}
+            
+        except (json.JSONDecodeError, AttributeError):
+            return {}
     
-    @property
-    def postgresql_username(self):
-        return getattr(self, '_postgresql_username', None)
+    # ✅ POSTGRESQL CONFIGURATION METHODS
     
-    @property
-    def postgresql_password_encrypted(self):
-        return getattr(self, '_postgresql_password_encrypted', None)
+    def get_postgresql_host(self):
+        return self.get_config('postgresql_host')
     
-    @property
-    def api_base_url(self):
-        return getattr(self, '_api_base_url', None)
+    def set_postgresql_host(self, value):
+        return self.set_config('postgresql_host', value)
     
-    @property
-    def api_key_encrypted(self):
-        return getattr(self, '_api_key_encrypted', None)
+    def get_postgresql_port(self):
+        return self.get_config('postgresql_port', 5432)
     
-    @property
-    def api_username(self):
-        return getattr(self, '_api_username', None)
+    def set_postgresql_port(self, value):
+        return self.set_config('postgresql_port', int(value) if value else 5432)
     
-    @property
-    def api_password_encrypted(self):
-        return getattr(self, '_api_password_encrypted', None)
+    def get_postgresql_database(self):
+        return self.get_config('postgresql_database')
     
-    @property
-    def settings(self):
-        return getattr(self, '_settings', '{}')
+    def set_postgresql_database(self, value):
+        return self.set_config('postgresql_database', value)
     
-    # Safe setters
-    def set_postgresql_password(self, password):
-        """Placeholder - implement after schema fix"""
-        logger.warning("PostgreSQL password setting not available - schema needs update")
-        return
+    def get_postgresql_username(self):
+        return self.get_config('postgresql_username')
+    
+    def set_postgresql_username(self, value):
+        return self.set_config('postgresql_username', value)
     
     def get_postgresql_password(self):
-        """Placeholder - implement after schema fix"""
-        return None
+        return self.get_config('postgresql_password')
     
-    def set_api_key(self, api_key):
-        """Placeholder - implement after schema fix"""
-        logger.warning("API key setting not available - schema needs update")
-        return
+    def set_postgresql_password(self, value):
+        return self.set_config('postgresql_password', value)
     
-    def get_api_key(self):
-        """Placeholder - implement after schema fix"""
-        return None
+    # ✅ API CONFIGURATION METHODS
     
-    def set_api_password(self, password):
-        """Placeholder - implement after schema fix"""
-        logger.warning("API password setting not available - schema needs update")
-        return
+    def get_api_base_url(self):
+        return self.get_config('api_base_url')
+    
+    def set_api_base_url(self, value):
+        return self.set_config('api_base_url', value)
+    
+    def get_api_username(self):
+        return self.get_config('api_username')
+    
+    def set_api_username(self, value):
+        return self.set_config('api_username', value)
     
     def get_api_password(self):
-        """Placeholder - implement after schema fix"""
-        return None
+        return self.get_config('api_password')
     
-    # Connection configuration methods
+    def set_api_password(self, value):
+        return self.set_config('api_password', value)
+    
+    def get_api_key(self):
+        return self.get_config('api_key')
+    
+    def set_api_key(self, value):
+        return self.set_config('api_key', value)
+    
+    # ✅ CONNECTION STATUS METHODS
+    
     def has_postgresql_config(self):
         """Check if PostgreSQL connection is configured"""
-        return False  # Always false until schema is fixed
+        return bool(
+            self.get_postgresql_host() and 
+            self.get_postgresql_database() and 
+            self.get_postgresql_username()
+        )
     
     def has_api_config(self):
         """Check if API connection is configured"""
-        return False  # Always false until schema is fixed
+        return bool(self.get_api_base_url())
     
     def get_preferred_sync_method(self):
         """Get preferred sync method"""
-        return 'none'
+        if self.has_postgresql_config():
+            return 'postgresql'
+        elif self.has_api_config():
+            return 'api'
+        else:
+            return 'none'
     
-    # Sync status methods
+    # ✅ SYNC STATUS METHODS
+    
     def mark_sync_started(self):
         """Mark that sync has started"""
         self.sync_status = 'in_progress'
@@ -162,7 +241,8 @@ class Company(db.Model):
         except Exception as e:
             logger.error(f"Error updating sync status: {e}")
     
-    # Statistics methods (safe versions)
+    # ✅ STATISTICS METHODS
+    
     def get_customer_count(self):
         """Get total number of customers"""
         try:
@@ -226,15 +306,16 @@ class Company(db.Model):
     def get_active_user_count(self):
         """Get count of active users"""
         try:
-            return self.users.filter_by(is_active=True).count()
+            return len([u for u in self.users if u.is_active])
         except Exception as e:
             logger.error(f"Error getting active user count: {e}")
             return 0
     
-    # Settings methods (safe versions)
+    # ✅ SETTINGS METHODS
+    
     def get_settings(self):
         """Get company settings as dict"""
-        return {
+        base_settings = {
             'enable_auto_sync': True,
             'sync_frequency': 3600,
             'notification_email': '',
@@ -246,6 +327,12 @@ class Company(db.Model):
             'currency': 'TZS',
             'date_format': '%Y-%m-%d'
         }
+        
+        # Merge with stored settings
+        stored_settings = self._get_settings_dict_safe()
+        base_settings.update(stored_settings)
+        
+        return base_settings
     
     def get_setting(self, key, default=None):
         """Get a specific setting value"""
@@ -253,11 +340,25 @@ class Company(db.Model):
         return settings.get(key, default)
     
     def update_settings(self, new_settings):
-        """Update company settings - placeholder"""
-        logger.warning("Settings update not available - schema needs update")
-        return
+        """Update company settings"""
+        try:
+            current_settings = self.get_settings()
+            current_settings.update(new_settings)
+            
+            # Try to store in database
+            try:
+                self.settings = json.dumps(current_settings)
+            except AttributeError:
+                # Store in cache if column doesn't exist
+                self._settings_cache = current_settings
+            
+            db.session.commit()
+            logger.info(f"Settings updated for company {self.id}")
+        except Exception as e:
+            logger.error(f"Error updating settings: {e}")
     
-    # Dashboard statistics
+    # ✅ DASHBOARD STATISTICS
+    
     def get_dashboard_stats(self):
         """Get dashboard statistics"""
         return {
@@ -280,7 +381,7 @@ class Company(db.Model):
                 'low_risk': 0,  # Placeholder
             },
             'users': {
-                'total': self.users.count(),
+                'total': len(self.users),
                 'active': self.get_active_user_count(),
             },
             'sync': {
@@ -293,7 +394,7 @@ class Company(db.Model):
     
     def to_dict(self, include_sensitive=False):
         """Convert company to dictionary"""
-        return {
+        data = {
             'id': self.id,
             'name': self.name,
             'slug': self.slug,
@@ -306,6 +407,18 @@ class Company(db.Model):
             'sync_status': self.sync_status,
             'total_syncs': self.total_syncs
         }
+        
+        if include_sensitive:
+            data.update({
+                'postgresql_host': self.get_postgresql_host(),
+                'postgresql_port': self.get_postgresql_port(),
+                'postgresql_database': self.get_postgresql_database(),
+                'postgresql_username': self.get_postgresql_username(),
+                'api_base_url': self.get_api_base_url(),
+                'api_username': self.get_api_username(),
+            })
+        
+        return data
     
     @staticmethod
     def create_company(name, slug=None, **kwargs):
