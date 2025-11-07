@@ -1,186 +1,180 @@
-#!/usr/bin/env python3
 """
-Simple Database Migration Script
-Add PostgreSQL configuration columns to companies table
+Direct Table Name Fix Script
+fix_table_names.py
 
-Usage:
-1. Make sure your Flask app is not running
-2. Run: python migrate_company_db.py
-3. Restart your Flask application
-
-This script will safely add the missing columns without affecting existing data.
+Replace incorrect table names in your current CRM service file
 """
 
-import sqlite3
 import os
-import sys
-from pathlib import Path
+import re
 
-def find_database():
-    """Find the SQLite database file"""
-    possible_paths = [
-        # Common Flask database locations
-        'instance/app.db',
-        'instance/database.db', 
-        'instance/churn.db',
-        'app.db',
-        'database.db',
-        'churn.db',
-        'churn_prediction.db',
-        # Check current directory
-        './app.db',
-        './database.db',
-        # Check parent directories
-        '../instance/app.db',
-        '../app.db'
-    ]
+def fix_crm_service_table_names():
+    """Fix table names in the CRM service file"""
     
-    for path in possible_paths:
-        if os.path.exists(path):
-            return path
+    crm_service_path = "app/services/crm_service.py"
     
-    # Try to find any .db file in instance or current directory
-    for directory in ['instance', '.']:
-        if os.path.exists(directory):
-            for file in os.listdir(directory):
-                if file.endswith('.db'):
-                    return os.path.join(directory, file)
+    if not os.path.exists(crm_service_path):
+        print(f"❌ CRM service file not found: {crm_service_path}")
+        return False
     
-    return None
-
-def check_companies_table(cursor):
-    """Check if companies table exists and get current columns"""
     try:
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='companies';")
-        if not cursor.fetchone():
-            print("❌ Error: 'companies' table not found in database")
-            return False, []
+        # Read the current file
+        with open(crm_service_path, 'r') as f:
+            content = f.read()
         
-        cursor.execute("PRAGMA table_info(companies);")
-        columns = [row[1] for row in cursor.fetchall()]
-        return True, columns
+        print("🔍 Current file read successfully")
+        
+        # Apply table name fixes
+        fixes = [
+            # Fix customer table name
+            (r'FROM customers\b', 'FROM crm_customers'),
+            (r'FROM "customers"', 'FROM "crm_customers"'),
+            (r'FROM `customers`', 'FROM `crm_customers`'),
+            
+            # Fix payment table name  
+            (r'FROM payments\b', 'FROM nav_mpesa_transactions'),
+            (r'FROM "payments"', 'FROM "nav_mpesa_transactions"'),
+            (r'FROM `payments`', 'FROM `nav_mpesa_transactions`'),
+            
+            # Fix ticket table name
+            (r'FROM tickets\b', 'FROM crm_tickets'),
+            (r'FROM "tickets"', 'FROM "crm_tickets"'),
+            (r'FROM `tickets`', 'FROM `crm_tickets`'),
+            
+            # Note: spl_statistics is already correct
+        ]
+        
+        # Apply each fix
+        for old_pattern, new_pattern in fixes:
+            if re.search(old_pattern, content):
+                content = re.sub(old_pattern, new_pattern, content)
+                print(f"✅ Fixed: {old_pattern} → {new_pattern}")
+        
+        # Special fix for MPESA transaction field mapping
+        mpesa_field_fixes = [
+            # Map payment fields to MPESA fields  
+            (r'tx_amount,', '"TransAmount" as tx_amount,'),
+            (r'account_no,', '"BillRefNumber" as account_no,'),
+            (r'phone_no,', '"MSISDN" as phone_no,'),
+            (r'payer,', '"FirstName" as payer,'),
+            (r'created_at,', '"TransTime" as created_at,'),
+            (r'transaction_time,', '"TransTime" as transaction_time,'),
+            (r'mpesa_reference,', '"TransID" as mpesa_reference,'),
+        ]
+        
+        # Check if MPESA field mapping is needed
+        if 'nav_mpesa_transactions' in content and '"TransAmount"' not in content:
+            print("🔧 Applying MPESA field mapping...")
+            # Add proper MPESA field mapping
+            mpesa_select = '''
+                SELECT 
+                    "TransID" as id, 
+                    "TransAmount" as tx_amount, 
+                    "BillRefNumber" as account_no,
+                    "MSISDN" as phone_no, 
+                    "FirstName" as payer, 
+                    "TransTime" as created_at,
+                    "TransTime" as transaction_time, 
+                    "TransID" as mpesa_reference,
+                    TRUE as posted_to_ledgers,
+                    FALSE as is_refund,
+                    'completed' as status
+                FROM nav_mpesa_transactions'''
+            
+            # Replace the generic payment select
+            payment_select_pattern = r'SELECT\s+[^F]*FROM nav_mpesa_transactions'
+            content = re.sub(payment_select_pattern, mpesa_select, content, flags=re.DOTALL)
+            print("✅ Applied MPESA field mapping")
+        
+        # Write the fixed content back
+        with open(crm_service_path, 'w') as f:
+            f.write(content)
+        
+        print("✅ CRM service file updated with correct table names!")
+        return True
+        
     except Exception as e:
-        print(f"❌ Error checking companies table: {e}")
-        return False, []
+        print(f"❌ Error fixing CRM service: {e}")
+        return False
 
-def add_missing_columns(cursor, existing_columns):
-    """Add missing PostgreSQL configuration columns"""
+def verify_table_names():
+    """Verify the table names have been fixed"""
     
-    # Define the columns we need to add
-    new_columns = [
-        ('postgresql_host', 'TEXT'),
-        ('postgresql_port', 'INTEGER DEFAULT 5432'),
-        ('postgresql_database', 'TEXT'),
-        ('postgresql_username', 'TEXT'),
-        ('postgresql_password_encrypted', 'TEXT'),
-        ('api_base_url', 'TEXT'),
-        ('api_username', 'TEXT'),
-        ('api_password_encrypted', 'TEXT'),
-        ('api_key_encrypted', 'TEXT'),
-        ('settings', 'TEXT DEFAULT "{}"')
-    ]
+    crm_service_path = "app/services/crm_service.py"
     
-    added_count = 0
-    skipped_count = 0
-    
-    for column_name, column_definition in new_columns:
-        if column_name not in existing_columns:
-            try:
-                sql = f"ALTER TABLE companies ADD COLUMN {column_name} {column_definition};"
-                cursor.execute(sql)
-                print(f"✅ Added column: {column_name}")
-                added_count += 1
-            except sqlite3.OperationalError as e:
-                if "duplicate column name" in str(e).lower():
-                    print(f"⚠️  Column {column_name} already exists")
-                    skipped_count += 1
-                else:
-                    print(f"❌ Error adding column {column_name}: {e}")
-                    return False
+    try:
+        with open(crm_service_path, 'r') as f:
+            content = f.read()
+        
+        print("\n🔍 Verifying table names in CRM service:")
+        
+        # Check for old incorrect table names
+        incorrect_tables = ['FROM customers', 'FROM payments', 'FROM tickets']
+        correct_tables = ['FROM crm_customers', 'FROM nav_mpesa_transactions', 'FROM crm_tickets']
+        
+        issues_found = []
+        for incorrect in incorrect_tables:
+            if incorrect in content:
+                issues_found.append(incorrect)
+        
+        fixes_found = []
+        for correct in correct_tables:
+            if correct in content:
+                fixes_found.append(correct)
+        
+        if issues_found:
+            print("❌ Still found incorrect table names:")
+            for issue in issues_found:
+                print(f"   • {issue}")
         else:
-            print(f"⚠️  Column {column_name} already exists")
-            skipped_count += 1
-    
-    print(f"\n📊 Summary: {added_count} columns added, {skipped_count} already existed")
-    return True
+            print("✅ No incorrect table names found")
+        
+        if fixes_found:
+            print("✅ Found correct table names:")
+            for fix in fixes_found:
+                print(f"   • {fix}")
+        
+        return len(issues_found) == 0 and len(fixes_found) > 0
+        
+    except Exception as e:
+        print(f"❌ Error verifying: {e}")
+        return False
 
 def main():
-    """Main migration function"""
-    print("🚀 Starting database migration for PostgreSQL configuration...")
+    """Main function"""
     
-    # Find database
-    db_path = find_database()
-    if not db_path:
-        print("❌ Could not find database file!")
-        print("\nPlease ensure your database exists in one of these locations:")
-        print("  - instance/app.db")
-        print("  - app.db") 
-        print("  - database.db")
-        print("\nOr specify the path manually by editing this script.")
-        return False
+    print("🔧 === FIXING CRM TABLE NAMES ===")
     
-    print(f"📂 Found database: {db_path}")
+    # Step 1: Fix table names
+    print("📝 Step 1: Applying table name fixes...")
+    fix_success = fix_crm_service_table_names()
     
-    # Create backup
-    backup_path = f"{db_path}.backup"
-    try:
-        import shutil
-        shutil.copy2(db_path, backup_path)
-        print(f"💾 Created backup: {backup_path}")
-    except Exception as e:
-        print(f"⚠️  Could not create backup: {e}")
-        response = input("Continue without backup? (y/N): ")
-        if response.lower() != 'y':
-            return False
+    # Step 2: Verify fixes
+    print("🔍 Step 2: Verifying fixes...")
+    verify_success = verify_table_names()
     
-    # Connect to database
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        print("✅ Connected to database")
-    except Exception as e:
-        print(f"❌ Could not connect to database: {e}")
-        return False
+    # Summary
+    print(f"\n📋 === SUMMARY ===")
+    print(f"Table name fixes: {'✅ APPLIED' if fix_success else '❌ FAILED'}")
+    print(f"Verification: {'✅ PASSED' if verify_success else '❌ FAILED'}")
     
-    # Check companies table
-    table_exists, existing_columns = check_companies_table(cursor)
-    if not table_exists:
-        conn.close()
-        return False
-    
-    print(f"📋 Found {len(existing_columns)} existing columns")
-    
-    # Add missing columns
-    success = add_missing_columns(cursor, existing_columns)
-    
-    if success:
-        # Commit changes
-        conn.commit()
-        print("✅ Changes committed successfully!")
-        
-        # Verify changes
-        cursor.execute("PRAGMA table_info(companies);")
-        new_columns = [row[1] for row in cursor.fetchall()]
-        print(f"📋 Database now has {len(new_columns)} columns")
-        
-        conn.close()
-        
-        print("\n🎉 Migration completed successfully!")
-        print("\n📝 Next steps:")
-        print("  1. Restart your Flask application")
-        print("  2. Go to Company Settings")
-        print("  3. Configure your PostgreSQL connection")
-        print("  4. Test the connection")
-        print("  5. Enjoy 10-50x faster sync performance!")
-        
-        return True
+    if fix_success and verify_success:
+        print(f"\n🎉 SUCCESS! Table names have been fixed!")
+        print(f"\nNext steps:")
+        print(f"1. ✅ Table names updated in CRM service")
+        print(f"2. 🔄 Restart your Flask application")
+        print(f"3. 🧪 Test the CRM sync button")
+        print(f"4. 🚀 Enjoy lightning-fast PostgreSQL sync!")
     else:
-        # Rollback on error
-        conn.rollback()
-        conn.close()
-        print("❌ Migration failed - no changes made")
-        return False
+        print(f"\n❌ Table name fix failed. Manual intervention needed.")
+        print(f"\nManual fix:")
+        print(f"1. Edit app/services/crm_service.py")
+        print(f"2. Replace 'FROM customers' with 'FROM crm_customers'")
+        print(f"3. Replace 'FROM payments' with 'FROM nav_mpesa_transactions'")
+        print(f"4. Replace 'FROM tickets' with 'FROM crm_tickets'")
+    
+    return fix_success and verify_success
 
 if __name__ == "__main__":
     success = main()
-    sys.exit(0 if success else 1)
+    exit(0 if success else 1)

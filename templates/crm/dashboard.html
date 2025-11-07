@@ -571,8 +571,8 @@ document.addEventListener('DOMContentLoaded', function() {
             syncAlert.style.display = 'block';
             syncAlert.classList.add('show');
             
-            const connectionMethod = {% if connection_info.postgresql_configured %}'PostgreSQL'{% else %}'API'{% endif %};
-            syncMessage.textContent = `Enhanced sync starting via ${connectionMethod}...`;
+            const connectionMethod = '{% if connection_info.postgresql_configured %}PostgreSQL{% else %}API{% endif %}';
+            syncMessage.textContent = 'Enhanced sync starting via ' + connectionMethod + '...';
             
             // Disable button
             startSyncButton.disabled = true;
@@ -600,27 +600,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (data.success) {
                     // Show enhanced success message with performance info
-                    let successMessage = `🎉 Enhanced Sync Completed!\n\n${data.message}`;
+                    let successMessage = '🎉 Enhanced Sync Completed!\n\n' + data.message + '';
                     
                     if (data.performance) {
                         successMessage += `\n\n📊 Performance Metrics:`;
-                        successMessage += `\n• Duration: ${data.performance.sync_duration}s`;
-                        successMessage += `\n• Speed: ${data.performance.records_per_second} records/sec`;
-                        successMessage += `\n• Method: ${data.performance.connection_method.toUpperCase()}`;
-                        successMessage += `\n• Records: ${data.performance.total_records_processed:,}`;
+                        successMessage += '\n• Duration: ' + data.performance.sync_duration + 's';
+                        successMessage += '\n• Speed: ' + data.performance.records_per_second + ' records/sec';
+                        successMessage += '\n• Method: ' + data.performance.connection_method.toUpperCase() + '';
+                        successMessage += '\n• Records: ' + data.performance.total_records_processed:, + '';
                     }
                     
                     const successAlert = document.createElement('div');
                     successAlert.className = 'alert alert-success alert-dismissible fade show';
-                    successAlert.innerHTML = `
+                    successAlert.innerHTML = '
                         <div class="d-flex align-items-center">
                             <i class="fas fa-check-circle fa-2x me-3 text-success"></i>
                             <div>
                                 <strong>Enhanced Sync Completed!</strong> ${data.message}
-                                ${data.performance ? `
+                                ' + data.performance ? `
                                 <br><small class="text-muted">
-                                    ⚡ ${data.performance.records_per_second} records/sec via ${data.performance.connection_method.toUpperCase()}
-                                </small>` : ''}
+                                    ⚡ ${data.performance.records_per_second + ' records/sec via ${data.performance.connection_method.toUpperCase()}
+                                </small>' : ''}
                             </div>
                         </div>
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
@@ -638,15 +638,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Show enhanced error message
                     const errorAlert = document.createElement('div');
                     errorAlert.className = 'alert alert-danger alert-dismissible fade show';
-                    errorAlert.innerHTML = `
+                    errorAlert.innerHTML = '
                         <div class="d-flex align-items-center">
                             <i class="fas fa-exclamation-triangle fa-2x me-3 text-danger"></i>
                             <div>
                                 <strong>Enhanced Sync Failed!</strong> ${data.message}
-                                ${data.performance ? `
+                                ' + data.performance ? `
                                 <br><small class="text-muted">
-                                    Connection: ${data.performance.connection_method.toUpperCase()}
-                                </small>` : ''}
+                                    Connection: ${data.performance.connection_method.toUpperCase() + '
+                                </small>' : ''}
                             </div>
                         </div>
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>

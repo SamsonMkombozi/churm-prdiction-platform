@@ -80,4 +80,8 @@ def create_app(config_name='development'):
     from app.utils.template_filters import register_filters
     register_filters(app)
     
+    
+    # Add hasattr to Jinja2 templates
+    app.jinja_env.globals['hasattr'] = hasattr
+    
     return app
