@@ -1,0 +1,303 @@
+<!-- 
+🔍 DEBUG CRM DASHBOARD
+Enhanced version with comprehensive debugging for sync issues
+
+Replace or add this to your CRM dashboard template to get detailed debugging information
+-->
+
+<!-- Add this debug section right after the connection status alert -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow border-warning">
+            <div class="card-header py-3 bg-warning">
+                <h6 class="m-0 font-weight-bold text-dark">
+                    <i class="fas fa-bug me-2"></i>🔍 DEBUG MODE - CRM Sync Diagnostics
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Debug Tests</h6>
+                        <button class="btn btn-sm btn-info me-2 mb-2" onclick="debugConnectionInfo()">
+                            <i class="fas fa-info-circle me-1"></i>Test Connection Info
+                        </button>
+                        <button class="btn btn-sm btn-info me-2 mb-2" onclick="debugCompanyConfig()">
+                            <i class="fas fa-cogs me-1"></i>Test Company Config
+                        </button>
+                        <button class="btn btn-sm btn-warning me-2 mb-2" onclick="debugPostgreSQLConnection()">
+                            <i class="fas fa-database me-1"></i>Test PostgreSQL
+                        </button>
+                        <button class="btn btn-sm btn-success me-2 mb-2" onclick="debugSyncProcess()">
+                            <i class="fas fa-sync-alt me-1"></i>Test Sync Process
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Debug Output</h6>
+                        <div id="debugOutput" style="max-height: 200px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px;">
+                            Click a debug button to see output...
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <h6>Quick Actions</h6>
+                    <button class="btn btn-sm btn-danger me-2" onclick="clearDebugOutput()">
+                        <i class="fas fa-trash me-1"></i>Clear Output
+                    </button>
+                    <button class="btn btn-sm btn-primary me-2" onclick="copyDebugOutput()">
+                        <i class="fas fa-copy me-1"></i>Copy Output
+                    </button>
+                    <button class="btn btn-sm btn-secondary" onclick="runFullDiagnostic()">
+                        <i class="fas fa-diagnoses me-1"></i>Full Diagnostic
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add this enhanced JavaScript section to the existing extra_js block -->
+<script>
+// Debug utility functions
+function debugLog(message, type = 'info') {
+    const output = document.getElementById('debugOutput');
+    const timestamp = new Date().toLocaleTimeString();
+    const icon = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'warning' ? '⚠️' : 'ℹ️';
+    output.innerHTML += `[${timestamp}] ${icon} ${message}\n`;
+    output.scrollTop = output.scrollHeight;
+}
+
+function clearDebugOutput() {
+    document.getElementById('debugOutput').innerHTML = '';
+}
+
+function copyDebugOutput() {
+    const output = document.getElementById('debugOutput');
+    navigator.clipboard.writeText(output.textContent).then(() => {
+        alert('Debug output copied to clipboard!');
+    });
+}
+
+// Enhanced debug functions
+function debugConnectionInfo() {
+    debugLog('🔍 Testing connection info...', 'info');
+    
+    fetch('/crm/connection/test')
+        .then(response => response.json())
+        .then(data => {
+            debugLog(`Connection test result: ${JSON.stringify(data, null, 2)}`, 'success');
+            
+            if (data.success) {
+                debugLog(`✅ Connection type: ${data.connection_type}`, 'success');
+            } else {
+                debugLog(`❌ Connection failed: ${data.message}`, 'error');
+            }
+        })
+        .catch(error => {
+            debugLog(`❌ Connection test error: ${error}`, 'error');
+        });
+}
+
+function debugCompanyConfig() {
+    debugLog('🏢 Testing company configuration...', 'info');
+    
+    // Test company API endpoint
+    fetch('/company/api/stats')
+        .then(response => response.json())
+        .then(data => {
+            debugLog(`Company stats: ${JSON.stringify(data, null, 2)}`, 'success');
+        })
+        .catch(error => {
+            debugLog(`❌ Company config error: ${error}`, 'error');
+        });
+}
+
+function debugPostgreSQLConnection() {
+    debugLog('🗃️ Testing PostgreSQL connection...', 'info');
+    
+    fetch('/company/test-connection', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({test_type: 'postgresql'})
+    })
+        .then(response => response.json())
+        .then(data => {
+            debugLog(`PostgreSQL test: ${JSON.stringify(data, null, 2)}`, data.postgresql?.success ? 'success' : 'error');
+            
+            if (data.postgresql?.success) {
+                debugLog(`✅ PostgreSQL connected successfully!`, 'success');
+                if (data.postgresql.tables) {
+                    debugLog(`📊 Found tables: ${data.postgresql.tables.join(', ')}`, 'info');
+                }
+                if (data.postgresql.table_counts) {
+                    debugLog(`📈 Table counts: ${JSON.stringify(data.postgresql.table_counts, null, 2)}`, 'info');
+                }
+            } else {
+                debugLog(`❌ PostgreSQL connection failed`, 'error');
+                if (data.postgresql?.details) {
+                    data.postgresql.details.forEach(detail => {
+                        debugLog(`   • ${detail}`, 'warning');
+                    });
+                }
+            }
+        })
+        .catch(error => {
+            debugLog(`❌ PostgreSQL test error: ${error}`, 'error');
+        });
+}
+
+function debugSyncProcess() {
+    debugLog('🔄 Testing sync process...', 'info');
+    
+    // Test with minimal sync options
+    const testSyncOptions = {
+        sync_customers: true,
+        sync_payments: false,
+        sync_tickets: false,
+        sync_usage: false
+    };
+    
+    debugLog(`📋 Sync options: ${JSON.stringify(testSyncOptions, null, 2)}`, 'info');
+    
+    fetch('/crm/sync', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(testSyncOptions)
+    })
+        .then(response => {
+            debugLog(`📡 Sync response status: ${response.status} ${response.statusText}`, 'info');
+            return response.json();
+        })
+        .then(data => {
+            debugLog(`🔄 Sync result: ${JSON.stringify(data, null, 2)}`, data.success ? 'success' : 'error');
+            
+            if (data.success) {
+                debugLog(`✅ Sync completed successfully!`, 'success');
+                if (data.stats) {
+                    debugLog(`📊 Sync stats: ${JSON.stringify(data.stats, null, 2)}`, 'info');
+                }
+                if (data.performance) {
+                    debugLog(`⚡ Performance: ${JSON.stringify(data.performance, null, 2)}`, 'info');
+                }
+            } else {
+                debugLog(`❌ Sync failed: ${data.message}`, 'error');
+                if (data.error_details) {
+                    debugLog(`🔍 Error details: ${data.error_details}`, 'error');
+                }
+                if (data.debug_info) {
+                    debugLog(`🐛 Debug info: ${JSON.stringify(data.debug_info, null, 2)}`, 'warning');
+                }
+            }
+        })
+        .catch(error => {
+            debugLog(`❌ Sync test error: ${error}`, 'error');
+        });
+}
+
+function runFullDiagnostic() {
+    debugLog('🚀 Starting full diagnostic...', 'info');
+    clearDebugOutput();
+    
+    // Run all tests in sequence
+    setTimeout(() => debugConnectionInfo(), 500);
+    setTimeout(() => debugCompanyConfig(), 1500);
+    setTimeout(() => debugPostgreSQLConnection(), 2500);
+    setTimeout(() => debugSyncProcess(), 4000);
+    
+    setTimeout(() => {
+        debugLog('🎯 Full diagnostic completed!', 'success');
+    }, 6000);
+}
+
+// Enhanced sync function with better error handling
+function enhancedStartSync() {
+    debugLog('🚀 Starting enhanced sync...', 'info');
+    
+    // Get selected sync options
+    const syncOptions = {
+        sync_customers: document.getElementById('syncCustomers').checked,
+        sync_payments: document.getElementById('syncPayments').checked,
+        sync_tickets: document.getElementById('syncTickets').checked,
+        sync_usage: document.getElementById('syncUsage').checked
+    };
+    
+    debugLog(`📋 Enhanced sync options: ${JSON.stringify(syncOptions, null, 2)}`, 'info');
+    
+    // Check if at least one option is selected
+    if (!Object.values(syncOptions).some(v => v)) {
+        debugLog('❌ No sync options selected!', 'error');
+        alert('Please select at least one data type to sync.');
+        return;
+    }
+    
+    // Show progress
+    const syncAlert = document.getElementById('syncAlert');
+    if (syncAlert) {
+        syncAlert.style.display = 'block';
+        syncAlert.classList.add('show');
+    }
+    
+    debugLog('📡 Sending sync request...', 'info');
+    
+    fetch('/crm/sync', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(syncOptions)
+    })
+        .then(response => {
+            debugLog(`📡 Sync response: ${response.status} ${response.statusText}`, 'info');
+            return response.json();
+        })
+        .then(data => {
+            // Hide progress
+            if (syncAlert) {
+                syncAlert.classList.remove('show');
+                setTimeout(() => { syncAlert.style.display = 'none'; }, 300);
+            }
+            
+            debugLog(`🔄 Enhanced sync result: ${JSON.stringify(data, null, 2)}`, data.success ? 'success' : 'error');
+            
+            if (data.success) {
+                debugLog(`✅ Enhanced sync completed successfully!`, 'success');
+                alert(`🎉 Sync Completed!\n\n${data.message}`);
+                
+                // Reload page after short delay
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            } else {
+                debugLog(`❌ Enhanced sync failed: ${data.message}`, 'error');
+                alert(`❌ Sync Failed!\n\n${data.message}`);
+            }
+        })
+        .catch(error => {
+            // Hide progress
+            if (syncAlert) {
+                syncAlert.classList.remove('show');
+                setTimeout(() => { syncAlert.style.display = 'none'; }, 300);
+            }
+            
+            debugLog(`❌ Enhanced sync error: ${error}`, 'error');
+            alert(`❌ Sync Error!\n\n${error}`);
+        });
+}
+
+// Replace the existing sync button functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const startSyncButton = document.getElementById('startSyncButton');
+    if (startSyncButton) {
+        // Remove existing event listeners and add our enhanced one
+        startSyncButton.replaceWith(startSyncButton.cloneNode(true));
+        document.getElementById('startSyncButton').addEventListener('click', enhancedStartSync);
+    }
+    
+    // Auto-run diagnostic on page load (optional)
+    // setTimeout(() => runFullDiagnostic(), 1000);
+});
+</script>

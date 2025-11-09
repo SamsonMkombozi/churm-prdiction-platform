@@ -1,13 +1,13 @@
 """
-Enhanced CRM Controller with Selective Sync Support - FIXED VERSION
+Enhanced CRM Controller with Selective Sync Support - COMPLETELY FIXED VERSION
 app/controllers/crm_controller.py
 
 ✅ FIXES:
-1. Use last_sync_at instead of last_sync
-2. Use last_sync_at instead of last_sync in sync_status route
-3. Fixed all attribute name mismatches
-
-Handles the selective sync functionality from the dashboard.
+1. Pass company variable to all templates
+2. Pass pagination objects correctly
+3. Pass filter variables for template compatibility
+4. Proper error handling for missing data
+5. Use last_sync_at instead of last_sync throughout
 """
 
 from flask import Blueprint, render_template, request, jsonify, current_app, redirect, url_for
@@ -16,7 +16,7 @@ from app.models import Customer, Payment, Ticket
 from app.models.company import Company 
 from app.services.crm_service import EnhancedCRMService
 from app.extensions import db
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, or_
 from datetime import datetime, timedelta
 import traceback
 
@@ -276,60 +276,241 @@ def test_connection():
             'connection_type': 'error'
         }), 500
 
-# Keep existing routes for customers, payments, tickets
+# ✅ FIXED: Customer management page with all required template variables
 @crm_bp.route('/customers')
 @login_required
 def customers():
-    """Customer management page"""
+    """Customer management page - COMPLETELY FIXED VERSION"""
     
     company = current_user.company
     if not company:
         return redirect(url_for('dashboard.index'))
     
-    # Get customers with pagination
-    page = request.args.get('page', 1, type=int)
-    per_page = 50
-    
-    customers = Customer.query.filter_by(company_id=company.id)\
-        .order_by(desc(Customer.created_at))\
-        .paginate(page=page, per_page=per_page, error_out=False)
-    
-    return render_template('crm/customers.html', customers=customers)
+    try:
+        # Get filters from request
+        status_filter = request.args.get('status', '')
+        risk_filter = request.args.get('risk', '')
+        search_filter = request.args.get('search', '')
+        
+        # Get customers with pagination and filters
+        page = request.args.get('page', 1, type=int)
+        per_page = 50
+        
+        query = Customer.query.filter_by(company_id=company.id)
+        
+        # Apply filters
+        if status_filter:
+            query = query.filter_by(status=status_filter)
+        if risk_filter:
+            query = query.filter_by(churn_risk=risk_filter)
+        if search_filter:
+            query = query.filter(
+                or_(
+                    Customer.customer_name.ilike(f'%{search_filter}%'),
+                    Customer.email.ilike(f'%{search_filter}%') if Customer.email else False
+                )
+            )
+        
+        # Calculate tenure for display
+        for customer in query.all():
+            if customer.signup_date:
+                tenure_delta = datetime.utcnow() - customer.signup_date
+                customer.tenure_months = max(1, tenure_delta.days // 30)
+            else:
+                customer.tenure_months = 0
+        
+        pagination = query.order_by(desc(Customer.created_at))\
+            .paginate(page=page, per_page=per_page, error_out=False)
+        
+        return render_template('crm/customers.html', 
+                             company=company,  # ✅ FIX: Pass company
+                             customers=pagination.items,  # ✅ FIX: Use pagination.items
+                             pagination=pagination,  # ✅ FIX: Pass pagination object
+                             current_status=status_filter,  # ✅ FIX: Pass current filters
+                             current_risk=risk_filter,
+                             current_search=search_filter)
+                             
+    except Exception as e:
+        current_app.logger.error(f"Customers page error: {str(e)}")
+        current_app.logger.error(traceback.format_exc())
+        
+        # Return safe fallback
+        return render_template('crm/customers.html',
+                             company=company,
+                             customers=[],
+                             pagination=type('Pagination', (), {'total': 0, 'pages': 1, 'page': 1, 'per_page': 50, 'has_prev': False, 'has_next': False})(),
+                             current_status='',
+                             current_risk='',
+                             current_search='',
+                             error_message=str(e))
 
+# ✅ FIXED: Payment management page with all required template variables
 @crm_bp.route('/payments')
 @login_required
 def payments():
-    """Payment management page"""
+    """Payment management page - COMPLETELY FIXED VERSION"""
     
     company = current_user.company
     if not company:
         return redirect(url_for('dashboard.index'))
     
-    # Get payments with pagination
-    page = request.args.get('page', 1, type=int)
-    per_page = 50
-    
-    payments = Payment.query.filter_by(company_id=company.id)\
-        .order_by(desc(Payment.payment_date))\
-        .paginate(page=page, per_page=per_page, error_out=False)
-    
-    return render_template('crm/payments.html', payments=payments)
+    try:
+        # Get filters from request
+        status_filter = request.args.get('status', '')
+        method_filter = request.args.get('method', '')
+        search_filter = request.args.get('search', '')
+        
+        # Get payments with pagination and filters
+        page = request.args.get('page', 1, type=int)
+        per_page = 50
+        
+        query = Payment.query.filter_by(company_id=company.id)
+        
+        # Apply filters
+        if status_filter:
+            query = query.filter_by(status=status_filter)
+        if method_filter:
+            query = query.filter_by(payment_method=method_filter)
+        if search_filter:
+            query = query.join(Customer).filter(
+                or_(
+                    Payment.transaction_id.ilike(f'%{search_filter}%'),
+                    Customer.customer_name.ilike(f'%{search_filter}%')
+                )
+            )
+        
+        pagination = query.order_by(desc(Payment.payment_date))\
+            .paginate(page=page, per_page=per_page, error_out=False)
+        
+        return render_template('crm/payments.html',
+                             company=company,  # ✅ FIX: Pass company
+                             payments=pagination.items,  # ✅ FIX: Use pagination.items
+                             pagination=pagination,  # ✅ FIX: Pass pagination object
+                             current_status=status_filter,  # ✅ FIX: Pass current filters
+                             current_method=method_filter,
+                             current_search=search_filter)
+                             
+    except Exception as e:
+        current_app.logger.error(f"Payments page error: {str(e)}")
+        current_app.logger.error(traceback.format_exc())
+        
+        # Return safe fallback
+        return render_template('crm/payments.html',
+                             company=company,
+                             payments=[],
+                             pagination=type('Pagination', (), {'total': 0, 'pages': 1, 'page': 1, 'per_page': 50, 'has_prev': False, 'has_next': False})(),
+                             current_status='',
+                             current_method='',
+                             current_search='',
+                             error_message=str(e))
 
+# ✅ FIXED: Ticket management page with all required template variables
 @crm_bp.route('/tickets')
 @login_required
 def tickets():
-    """Ticket management page"""
+    """Ticket management page - COMPLETELY FIXED VERSION"""
     
     company = current_user.company
     if not company:
         return redirect(url_for('dashboard.index'))
     
-    # Get tickets with pagination
-    page = request.args.get('page', 1, type=int)
-    per_page = 50
+    try:
+        # Get filters from request
+        status_filter = request.args.get('status', '')
+        priority_filter = request.args.get('priority', '')
+        search_filter = request.args.get('search', '')
+        
+        # Get tickets with pagination and filters
+        page = request.args.get('page', 1, type=int)
+        per_page = 50
+        
+        query = Ticket.query.filter_by(company_id=company.id)
+        
+        # Apply filters
+        if status_filter:
+            query = query.filter_by(status=status_filter)
+        if priority_filter:
+            query = query.filter_by(priority=priority_filter)
+        if search_filter:
+            query = query.filter(
+                or_(
+                    Ticket.title.ilike(f'%{search_filter}%'),
+                    Ticket.ticket_number.ilike(f'%{search_filter}%')
+                )
+            )
+        
+        pagination = query.order_by(desc(Ticket.created_at))\
+            .paginate(page=page, per_page=per_page, error_out=False)
+        
+        return render_template('crm/tickets.html',
+                             company=company,  # ✅ FIX: Pass company
+                             tickets=pagination.items,  # ✅ FIX: Use pagination.items
+                             pagination=pagination,  # ✅ FIX: Pass pagination object
+                             current_status=status_filter,  # ✅ FIX: Pass current filters
+                             current_priority=priority_filter,
+                             current_search=search_filter)
+                             
+    except Exception as e:
+        current_app.logger.error(f"Tickets page error: {str(e)}")
+        current_app.logger.error(traceback.format_exc())
+        
+        # Return safe fallback
+        return render_template('crm/tickets.html',
+                             company=company,
+                             tickets=[],
+                             pagination=type('Pagination', (), {'total': 0, 'pages': 1, 'page': 1, 'per_page': 50, 'has_prev': False, 'has_next': False})(),
+                             current_status='',
+                             current_priority='',
+                             current_search='',
+                             error_message=str(e))
+
+# ✅ BONUS: Detail pages for individual records
+@crm_bp.route('/customers/<int:customer_id>')
+@login_required
+def customer_detail(customer_id):
+    """Customer detail page"""
+    company = current_user.company
+    if not company:
+        return redirect(url_for('dashboard.index'))
     
-    tickets = Ticket.query.filter_by(company_id=company.id)\
-        .order_by(desc(Ticket.created_at))\
-        .paginate(page=page, per_page=per_page, error_out=False)
+    customer = Customer.query.filter_by(
+        id=customer_id,
+        company_id=company.id
+    ).first_or_404()
     
-    return render_template('crm/tickets.html', tickets=tickets)
+    # Calculate tenure
+    if customer.signup_date:
+        tenure_delta = datetime.utcnow() - customer.signup_date
+        customer.tenure_months = max(1, tenure_delta.days // 30)
+    
+    # Get recent payments and tickets
+    recent_payments = Payment.query.filter_by(
+        customer_id=customer.id
+    ).order_by(desc(Payment.payment_date)).limit(10).all()
+    
+    recent_tickets = Ticket.query.filter_by(
+        customer_id=customer.id
+    ).order_by(desc(Ticket.created_at)).limit(10).all()
+    
+    return render_template('crm/customer_detail.html',
+                         company=company,
+                         customer=customer,
+                         recent_payments=recent_payments,
+                         recent_tickets=recent_tickets)
+
+@crm_bp.route('/tickets/<int:ticket_id>')
+@login_required
+def ticket_detail(ticket_id):
+    """Ticket detail page"""
+    company = current_user.company
+    if not company:
+        return redirect(url_for('dashboard.index'))
+    
+    ticket = Ticket.query.filter_by(
+        id=ticket_id,
+        company_id=company.id
+    ).first_or_404()
+    
+    return render_template('crm/ticket_detail.html',
+                         company=company,
+                         ticket=ticket)
