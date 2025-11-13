@@ -183,7 +183,7 @@
                                 Total Revenue
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                TZS {{ "{:,.0f}".format(stats.total_revenue if stats.total_revenue else 0) }}
+                                {{company.currency}} {{ "{:,.0f}".format(stats.total_revenue if stats.total_revenue else 0) }}
                             </div>
                             <small class="text-muted">{{ "{:,}".format(stats.payments if stats.payments else 0) }} payments</small>
                         </div>
@@ -363,7 +363,7 @@
                                         </span>
                                     </td>
                                     <td>{{ customer.tenure_months or 0 }} months</td>
-                                    <td>TZS {{ "{:,.0f}".format(customer.monthly_charges or 0) }}</td>
+                                    <td>{{company.currency}} {{ "{:,.0f}".format(customer.monthly_charges or 0) }}</td>
                                     <td>{{ customer.created_at|datetime if customer.created_at else 'N/A' }}</td>
                                 </tr>
                                 {% endfor %}

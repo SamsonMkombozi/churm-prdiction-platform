@@ -1,566 +1,230 @@
 {% extends 'base.html' %}
 
-{% block title %}Company Settings - {{ company.name }}{% endblock %}
+{% block title %}Company Settings{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="h2">
-            <i class="fas fa-cog me-2"></i>Company Settings
-        </h1>
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="fas fa-cog me-2"></i>Company Settings
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
         <a href="{{ url_for('company.index') }}" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left me-2"></i>Back to Overview
         </a>
     </div>
-
-    <form method="POST" action="{{ url_for('company.settings') }}">
-        <!-- Basic Information -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-building me-2"></i>Basic Information
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="name" class="form-label">Company Name *</label>
-                            <input type="text" class="form-control" id="name" name="name" 
-                                   value="{{ company.name }}" required>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="industry" class="form-label">Industry</label>
-                            <input type="text" class="form-control" id="industry" name="industry" 
-                                   value="{{ company.industry or '' }}">
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="mb-3">
-                    <label for="description" class="form-label">Description</label>
-                    <textarea class="form-control" id="description" name="description" 
-                              rows="3">{{ company.description or '' }}</textarea>
-                </div>
-                
-                <div class="mb-3">
-                    <label for="website" class="form-label">Website</label>
-                    <input type="url" class="form-control" id="website" name="website" 
-                           value="{{ company.website or '' }}" placeholder="https://example.com">
-                </div>
-            </div>
-        </div>
-
-        <!-- ✅ ENHANCED: PostgreSQL Configuration -->
-        <div class="card mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="fas fa-database me-2"></i>PostgreSQL Configuration
-                    <span class="badge bg-success ms-2">Recommended</span>
-                </h5>
-                <button type="button" class="btn btn-sm btn-info" id="testPostgresBtn">
-                    <i class="fas fa-plug me-1"></i>Test Connection
-                </button>
-            </div>
-            <div class="card-body">
-                <div class="alert alert-info">
-                    <i class="fas fa-rocket me-2"></i>
-                    <strong>Performance Boost:</strong> Direct database connection provides 10-50x faster sync performance 
-                    compared to API methods. Configure your CRM database details below.
-                </div>
-                
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="postgresql_host" class="form-label">PostgreSQL Host *</label>
-                            <input type="text" class="form-control" id="postgresql_host" name="postgresql_host" 
-                                   value="{{ company.postgresql_host or '' }}" 
-                                   placeholder="localhost or IP address">
-                            <small class="form-text text-muted">Your PostgreSQL server hostname or IP</small>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="postgresql_port" class="form-label">Port</label>
-                            <input type="number" class="form-control" id="postgresql_port" name="postgresql_port" 
-                                   value="{{ company.postgresql_port or 5432 }}" 
-                                   placeholder="5432">
-                            <small class="form-text text-muted">Usually 5432 for PostgreSQL</small>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="postgresql_database" class="form-label">Database Name *</label>
-                            <input type="text" class="form-control" id="postgresql_database" name="postgresql_database" 
-                                   value="{{ company.postgresql_database or '' }}" 
-                                   placeholder="your_crm_database">
-                            <small class="form-text text-muted">Name of your CRM database</small>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="postgresql_username" class="form-label">Username *</label>
-                            <input type="text" class="form-control" id="postgresql_username" name="postgresql_username" 
-                                   value="{{ company.postgresql_username or '' }}" 
-                                   placeholder="database_user">
-                            <small class="form-text text-muted">Database user with read access</small>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="mb-3">
-                    <label for="postgresql_password" class="form-label">Password *</label>
-                    <input type="password" class="form-control" id="postgresql_password" name="postgresql_password" 
-                           placeholder="Leave blank to keep current password">
-                    <small class="form-text text-muted">Database password (stored encrypted)</small>
-                </div>
-                
-                <div class="alert alert-warning">
-                    <i class="fas fa-shield-alt me-2"></i>
-                    <strong>Security Note:</strong> Passwords are encrypted and stored securely. Ensure your database user 
-                    has only READ access to the required CRM tables (customers, payments, tickets, spl_statistics).
-                </div>
-            </div>
-        </div>
-        
-        <!-- ✅ ENHANCED: API Fallback Configuration -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-wifi me-2"></i>API Configuration 
-                    <span class="badge bg-warning ms-2">Fallback</span>
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i>
-                    <strong>Fallback Method:</strong> API sync will be used if PostgreSQL is not configured. 
-                    Slower than direct database access but still functional.
-                </div>
-                
-                <div class="mb-3">
-                    <label for="api_base_url" class="form-label">CRM API URL</label>
-                    <input type="url" class="form-control" id="api_base_url" name="api_base_url" 
-                           value="{{ company.api_base_url or '' }}" 
-                           placeholder="http://localhost/Web_CRM/api.php">
-                    <small class="form-text text-muted">Your CRM API endpoint URL</small>
-                </div>
-                
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="api_username" class="form-label">API Username</label>
-                            <input type="text" class="form-control" id="api_username" name="api_username" 
-                                   value="{{ company.api_username or '' }}" 
-                                   placeholder="api_user">
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="api_password" class="form-label">API Password</label>
-                            <input type="password" class="form-control" id="api_password" name="api_password" 
-                                   placeholder="Leave blank to keep current password">
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="mb-3">
-                    <label for="api_key" class="form-label">API Key (Alternative)</label>
-                    <input type="password" class="form-control" id="api_key" name="api_key" 
-                           placeholder="Leave blank to keep current key">
-                    <small class="form-text text-muted">If your API uses key-based authentication</small>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Sync Settings -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-sync-alt me-2"></i>Sync Settings
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="enable_auto_sync" name="enable_auto_sync" 
-                               {{ 'checked' if company.get_setting('enable_auto_sync', True) }}>
-                        <label class="form-check-label" for="enable_auto_sync">
-                            Enable Automatic Data Synchronization
-                        </label>
-                    </div>
-                </div>
-                
-                <div class="mb-3">
-                    <label for="sync_frequency" class="form-label">Sync Frequency</label>
-                    <select class="form-select" id="sync_frequency" name="sync_frequency">
-                        <option value="900" {{ 'selected' if company.get_setting('sync_frequency') == 900 }}>Every 15 minutes</option>
-                        <option value="1800" {{ 'selected' if company.get_setting('sync_frequency') == 1800 }}>Every 30 minutes</option>
-                        <option value="3600" {{ 'selected' if company.get_setting('sync_frequency', 3600) == 3600 }}>Every hour</option>
-                        <option value="7200" {{ 'selected' if company.get_setting('sync_frequency') == 7200 }}>Every 2 hours</option>
-                        <option value="21600" {{ 'selected' if company.get_setting('sync_frequency') == 21600 }}>Every 6 hours</option>
-                        <option value="86400" {{ 'selected' if company.get_setting('sync_frequency') == 86400 }}>Daily</option>
-                    </select>
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">Default Sync Options</label>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="default_sync_customers" name="default_sync_customers" 
-                               {{ 'checked' if company.get_setting('default_sync_customers', True) }}>
-                        <label class="form-check-label" for="default_sync_customers">
-                            Sync Customers by default
-                        </label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="default_sync_payments" name="default_sync_payments" 
-                               {{ 'checked' if company.get_setting('default_sync_payments', True) }}>
-                        <label class="form-check-label" for="default_sync_payments">
-                            Sync Payments by default
-                        </label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="default_sync_tickets" name="default_sync_tickets" 
-                               {{ 'checked' if company.get_setting('default_sync_tickets', True) }}>
-                        <label class="form-check-label" for="default_sync_tickets">
-                            Sync Tickets by default
-                        </label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="default_sync_usage" name="default_sync_usage" 
-                               {{ 'checked' if company.get_setting('default_sync_usage', False) }}>
-                        <label class="form-check-label" for="default_sync_usage">
-                            Sync Usage Statistics by default
-                        </label>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Notification Settings -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-bell me-2"></i>Notification Settings
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <label for="notification_email" class="form-label">Notification Email</label>
-                    <input type="email" class="form-control" id="notification_email" name="notification_email" 
-                           value="{{ company.get_setting('notification_email', '') }}">
-                    <small class="form-text text-muted">Email address for system notifications</small>
-                </div>
-                
-                <div class="mb-3">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="enable_email_alerts" name="enable_email_alerts" 
-                               {{ 'checked' if company.get_setting('enable_email_alerts') }}>
-                        <label class="form-check-label" for="enable_email_alerts">
-                            Enable Email Alerts for High-Risk Customers
-                        </label>
-                    </div>
-                </div>
-                
-                <div class="mb-3">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="enable_sync_notifications" name="enable_sync_notifications" 
-                               {{ 'checked' if company.get_setting('enable_sync_notifications', True) }}>
-                        <label class="form-check-label" for="enable_sync_notifications">
-                            Enable Sync Completion Notifications
-                        </label>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Prediction Settings -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-brain me-2"></i>Churn Prediction Settings
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="mb-3">
-                            <label for="threshold_high" class="form-label">High Risk Threshold</label>
-                            <input type="number" class="form-control" id="threshold_high" name="threshold_high" 
-                                   value="{{ company.get_setting('prediction_threshold_high', 0.7) }}" 
-                                   min="0" max="1" step="0.1">
-                            <small class="form-text text-muted">Above this = High Risk (default: 0.7)</small>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="mb-3">
-                            <label for="threshold_medium" class="form-label">Medium Risk Threshold</label>
-                            <input type="number" class="form-control" id="threshold_medium" name="threshold_medium" 
-                                   value="{{ company.get_setting('prediction_threshold_medium', 0.4) }}" 
-                                   min="0" max="1" step="0.1">
-                            <small class="form-text text-muted">Above this = Medium Risk (default: 0.4)</small>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="mb-3">
-                            <label for="threshold_low" class="form-label">Low Risk Threshold</label>
-                            <input type="number" class="form-control" id="threshold_low" name="threshold_low" 
-                                   value="{{ company.get_setting('prediction_threshold_low', 0.2) }}" 
-                                   min="0" max="1" step="0.1">
-                            <small class="form-text text-muted">Below this = Low Risk (default: 0.2)</small>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="mb-3">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="auto_prediction_enabled" name="auto_prediction_enabled" 
-                               {{ 'checked' if company.get_setting('auto_prediction_enabled', True) }}>
-                        <label class="form-check-label" for="auto_prediction_enabled">
-                            Automatically run predictions after sync
-                        </label>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Regional Settings -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-globe me-2"></i>Regional Settings
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="mb-3">
-                            <label for="timezone" class="form-label">Timezone</label>
-                            <select class="form-select" id="timezone" name="timezone">
-                                <option value="UTC" {{ 'selected' if company.get_setting('timezone', 'UTC') == 'UTC' }}>UTC</option>
-                                <option value="Africa/Nairobi" {{ 'selected' if company.get_setting('timezone') == 'Africa/Nairobi' }}>Africa/Nairobi (EAT)</option>
-                                <option value="Africa/Dar_es_Salaam" {{ 'selected' if company.get_setting('timezone') == 'Africa/Dar_es_Salaam' }}>Africa/Dar es Salaam (EAT)</option>
-                                <option value="America/New_York" {{ 'selected' if company.get_setting('timezone') == 'America/New_York' }}>America/New_York (EST)</option>
-                                <option value="Europe/London" {{ 'selected' if company.get_setting('timezone') == 'Europe/London' }}>Europe/London (GMT)</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="mb-3">
-                            <label for="date_format" class="form-label">Date Format</label>
-                            <select class="form-select" id="date_format" name="date_format">
-                                <option value="%Y-%m-%d" {{ 'selected' if company.get_setting('date_format', '%Y-%m-%d') == '%Y-%m-%d' }}>YYYY-MM-DD</option>
-                                <option value="%d/%m/%Y" {{ 'selected' if company.get_setting('date_format') == '%d/%m/%Y' }}>DD/MM/YYYY</option>
-                                <option value="%m/%d/%Y" {{ 'selected' if company.get_setting('date_format') == '%m/%d/%Y' }}>MM/DD/YYYY</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="mb-3">
-                            <label for="currency" class="form-label">Currency</label>
-                            <select class="form-select" id="currency" name="currency">
-                                <option value="TZS" {{ 'selected' if company.get_setting('currency', 'TZS') == 'TZS' }}>TZS (Tanzanian Shilling)</option>
-                                <option value="KES" {{ 'selected' if company.get_setting('currency') == 'KES' }}>KES (Kenyan Shilling)</option>
-                                <option value="USD" {{ 'selected' if company.get_setting('currency') == 'USD' }}>USD ($)</option>
-                                <option value="EUR" {{ 'selected' if company.get_setting('currency') == 'EUR' }}>EUR (€)</option>
-                                <option value="GBP" {{ 'selected' if company.get_setting('currency') == 'GBP' }}>GBP (£)</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Submit Button -->
-        <div class="mb-4">
-            <button type="submit" class="btn btn-primary btn-lg">
-                <i class="fas fa-save me-2"></i>Save Settings
-            </button>
-            <a href="{{ url_for('company.index') }}" class="btn btn-outline-secondary btn-lg">
-                Cancel
-            </a>
-            <button type="button" class="btn btn-info btn-lg" id="testAllConnectionsBtn">
-                <i class="fas fa-network-wired me-2"></i>Test All Connections
-            </button>
-        </div>
-    </form>
 </div>
 
-<!-- Connection Test Results Modal -->
-<div class="modal fade" id="connectionTestModal" tabindex="-1" aria-labelledby="connectionTestModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="connectionTestModalLabel">
-                    <i class="fas fa-network-wired me-2"></i>Connection Test Results
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div id="connectionTestResults">
-                    <!-- Results will be populated here -->
+<!-- Success/Error Messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <div class="alert-container mb-4">
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
+
+<form method="POST" action="{{ url_for('company.settings') }}">
+    <!-- Basic Information -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Basic Information</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Company Name *</label>
+                        <input type="text" class="form-control" id="name" name="name" 
+                               value="{{ company.name or '' }}" required>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="industry" class="form-label">Industry</label>
+                        <input type="text" class="form-control" id="industry" name="industry" 
+                               value="{{ company.industry or '' }}">
+                    </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            
+            <div class="mb-3">
+                <label for="description" class="form-label">Description</label>
+                <textarea class="form-control" id="description" name="description" rows="3">{{ company.description or '' }}</textarea>
+            </div>
+            
+            <div class="mb-3">
+                <label for="website" class="form-label">Website</label>
+                <input type="url" class="form-control" id="website" name="website" 
+                       value="{{ company.website or '' }}" placeholder="https://example.com">
             </div>
         </div>
     </div>
-</div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const testPostgresBtn = document.getElementById('testPostgresBtn');
-    const testAllConnectionsBtn = document.getElementById('testAllConnectionsBtn');
-    const connectionTestModal = new bootstrap.Modal(document.getElementById('connectionTestModal'));
-    const connectionTestResults = document.getElementById('connectionTestResults');
     
-    // Test PostgreSQL connection
-    if (testPostgresBtn) {
-        testPostgresBtn.addEventListener('click', function() {
-            testConnection('postgresql');
-        });
-    }
+    <!-- CRM Integration -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">CRM Integration</h5>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label for="crm_api_url" class="form-label">CRM API URL</label>
+                <input type="url" class="form-control" id="crm_api_url" name="crm_api_url" 
+                       value="{{ company.crm_api_url or '' }}" placeholder="https://your-crm.com/api">
+                <small class="form-text text-muted">Habari CRM API endpoint URL</small>
+            </div>
+            
+            <div class="mb-3">
+                <label for="crm_api_key" class="form-label">CRM API Key</label>
+                <input type="password" class="form-control" id="crm_api_key" name="crm_api_key" 
+                       placeholder="Leave blank to keep current key">
+                <small class="form-text text-muted">Your CRM API authentication key (stored encrypted)</small>
+            </div>
+        </div>
+    </div>
     
-    // Test all connections
-    if (testAllConnectionsBtn) {
-        testAllConnectionsBtn.addEventListener('click', function() {
-            testConnection('all');
-        });
-    }
+    <!-- Application Settings -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Application Settings</h5>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label for="notification_email" class="form-label">Notification Email</label>
+                <input type="email" class="form-control" id="notification_email" name="notification_email" 
+                       value="{{ company.notification_email or '' }}" placeholder="admin@example.com">
+                <small class="form-text text-muted">Email address for system notifications</small>
+            </div>
+            
+            <div class="mb-3">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="enable_email_alerts" name="enable_email_alerts"
+                           {% if company.enable_email_alerts %}checked{% endif %}>
+                    <label class="form-check-label" for="enable_email_alerts">
+                        Enable Email Alerts for High-Risk Customers
+                    </label>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="enable_auto_sync" name="enable_auto_sync"
+                           {% if company.enable_auto_sync %}checked{% endif %}>
+                    <label class="form-check-label" for="enable_auto_sync">
+                        Enable Automatic Data Synchronization
+                    </label>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="sync_frequency" class="form-label">Sync Frequency</label>
+                <select class="form-select" id="sync_frequency" name="sync_frequency">
+                    <option value="900" {% if company.sync_frequency == 900 %}selected{% endif %}>Every 15 minutes</option>
+                    <option value="1800" {% if company.sync_frequency == 1800 %}selected{% endif %}>Every 30 minutes</option>
+                    <option value="3600" {% if company.sync_frequency == 3600 or not company.sync_frequency %}selected{% endif %}>Every hour</option>
+                    <option value="7200" {% if company.sync_frequency == 7200 %}selected{% endif %}>Every 2 hours</option>
+                    <option value="21600" {% if company.sync_frequency == 21600 %}selected{% endif %}>Every 6 hours</option>
+                    <option value="86400" {% if company.sync_frequency == 86400 %}selected{% endif %}>Daily</option>
+                </select>
+            </div>
+        </div>
+    </div>
     
-    function testConnection(type) {
-        const button = type === 'all' ? testAllConnectionsBtn : testPostgresBtn;
-        const originalHtml = button.innerHTML;
-        
-        // Show loading state
-        button.disabled = true;
-        button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Testing...';
-        
-        // Prepare test data
-        let testData = {};
-        if (type === 'postgresql' || type === 'all') {
-            testData.postgresql = {
-                host: document.getElementById('postgresql_host').value,
-                port: document.getElementById('postgresql_port').value,
-                database: document.getElementById('postgresql_database').value,
-                username: document.getElementById('postgresql_username').value,
-                password: document.getElementById('postgresql_password').value
-            };
-        }
-        
-        if (type === 'api' || type === 'all') {
-            testData.api = {
-                base_url: document.getElementById('api_base_url').value,
-                username: document.getElementById('api_username').value,
-                password: document.getElementById('api_password').value,
-                api_key: document.getElementById('api_key').value
-            };
-        }
-        
-        // Make AJAX request
-        fetch('/crm/connection/test', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                test_type: type,
-                connection_data: testData
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            // Show results in modal
-            let resultsHtml = '';
-            
-            if (data.postgresql) {
-                resultsHtml += generateConnectionResult('PostgreSQL', data.postgresql);
-            }
-            
-            if (data.api) {
-                resultsHtml += generateConnectionResult('API', data.api);
-            }
-            
-            if (data.summary) {
-                resultsHtml += `
-                    <div class="alert alert-info mt-3">
-                        <h6><i class="fas fa-info-circle me-2"></i>Summary</h6>
-                        <p class="mb-0">${data.summary}</p>
+    <!-- Prediction Settings -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Churn Prediction Settings</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="threshold_high" class="form-label">High Risk Threshold</label>
+                        <input type="number" class="form-control" id="threshold_high" name="prediction_threshold_high" 
+                               value="{{ company.prediction_threshold_high or 0.7 }}" min="0" max="1" step="0.1">
+                        <small class="form-text text-muted">Churn probability above this value = High Risk</small>
                     </div>
-                `;
-            }
-            
-            connectionTestResults.innerHTML = resultsHtml;
-            connectionTestModal.show();
-        })
-        .catch(error => {
-            console.error('Connection test error:', error);
-            alert('Connection test failed: ' + error.message);
-        })
-        .finally(() => {
-            // Restore button state
-            button.disabled = false;
-            button.innerHTML = originalHtml;
-        });
-    }
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="threshold_medium" class="form-label">Medium Risk Threshold</label>
+                        <input type="number" class="form-control" id="threshold_medium" name="prediction_threshold_medium" 
+                               value="{{ company.prediction_threshold_medium or 0.4 }}" min="0" max="1" step="0.1">
+                        <small class="form-text text-muted">Churn probability above this value = Medium Risk</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     
-    function generateConnectionResult(type, result) {
-        const alertClass = result.success ? 'alert-success' : 'alert-danger';
-        const icon = result.success ? 'fa-check-circle' : 'fa-exclamation-triangle';
-        
-        let html = `
-            <div class="alert ${alertClass}">
-                <h6><i class="fas ${icon} me-2"></i>${type} Connection</h6>
-                <p class="mb-2">${result.message}</p>
-        `;
-        
-        if (result.details) {
-            html += '<ul class="mb-0">';
-            result.details.forEach(detail => {
-                html += `<li>${detail}</li>`;
-            });
-            html += '</ul>';
-        }
-        
-        if (result.tables && result.tables.length > 0) {
-            html += `<p class="mt-2 mb-0"><strong>Tables found:</strong> ${result.tables.join(', ')}</p>`;
-        }
-        
-        html += '</div>';
-        return html;
-    }
+    <!-- Regional Settings -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Regional Settings</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label for="timezone" class="form-label">Timezone</label>
+                        <select class="form-select" id="timezone" name="timezone">
+                            <option value="UTC" {% if company.timezone == 'UTC' %}selected{% endif %}>UTC</option>
+                            <option value="Africa/Nairobi" {% if company.timezone == 'Africa/Nairobi' or not company.timezone %}selected{% endif %}>Africa/Nairobi (EAT)</option>
+                            <option value="America/New_York" {% if company.timezone == 'America/New_York' %}selected{% endif %}>America/New_York (EST)</option>
+                            <option value="Europe/London" {% if company.timezone == 'Europe/London' %}selected{% endif %}>Europe/London (GMT)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label for="date_format" class="form-label">Date Format</label>
+                        <select class="form-select" id="date_format" name="date_format">
+                            <option value="%Y-%m-%d" {% if company.date_format == '%Y-%m-%d' or not company.date_format %}selected{% endif %}>YYYY-MM-DD</option>
+                            <option value="%d/%m/%Y" {% if company.date_format == '%d/%m/%Y' %}selected{% endif %}>DD/MM/YYYY</option>
+                            <option value="%m/%d/%Y" {% if company.date_format == '%m/%d/%Y' %}selected{% endif %}>MM/DD/YYYY</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label for="currency" class="form-label">Currency</label>
+                        <select class="form-select" id="currency" name="currency">
+                            <option value="TZS" {% if company.currency == 'TZS' or not company.currency %}selected{% endif %}>TZS (TSh)</option>
+                            <option value="USD" {% if company.currency == 'USD' %}selected{% endif %}>USD ($)</option>
+                            <option value="KES" {% if company.currency == 'KES' %}selected{% endif %}>KES (KSh)</option>
+                            <option value="EUR" {% if company.currency == 'EUR' %}selected{% endif %}>EUR (€)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     
-    // Form validation
-    const form = document.querySelector('form');
-    if (form) {
-        form.addEventListener('submit', function(e) {
-            const postgresHost = document.getElementById('postgresql_host').value;
-            const postgresDb = document.getElementById('postgresql_database').value;
-            const postgresUser = document.getElementById('postgresql_username').value;
-            
-            const apiUrl = document.getElementById('api_base_url').value;
-            
-            // Check if at least one method is configured
-            const hasPostgres = postgresHost && postgresDb && postgresUser;
-            const hasApi = apiUrl;
-            
-            if (!hasPostgres && !hasApi) {
-                e.preventDefault();
-                alert('Please configure at least one sync method (PostgreSQL or API) to enable data synchronization.');
-                return false;
-            }
-            
-            return true;
-        });
+    <!-- Submit Button -->
+    <div class="mb-4">
+        <button type="submit" class="btn btn-primary btn-lg">
+            <i class="fas fa-save me-2"></i>Save Settings
+        </button>
+        <a href="{{ url_for('company.index') }}" class="btn btn-outline-secondary btn-lg">
+            Cancel
+        </a>
+    </div>
+</form>
+
+<script>
+// Simple form validation
+document.querySelector('form').addEventListener('submit', function(e) {
+    const name = document.getElementById('name').value.trim();
+    if (!name) {
+        e.preventDefault();
+        alert('Company name is required!');
+        document.getElementById('name').focus();
     }
 });
 </script>
+
 {% endblock %}

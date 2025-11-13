@@ -120,7 +120,7 @@
                 <div class="card-body">
                     <div class="text-center">
                         <i class="fas fa-ticket-alt fa-2x text-info mb-2"></i>
-                        <h3 class="mb-0">{{ customer.total_tickets }}</h3>
+                        <h3 class="mb-0">{{ tickets|length }}</h3>
                         <p class="text-muted mb-0">Support Tickets</p>
                         {% if customer.last_ticket_date %}
                         <small class="text-muted">Last: {{ customer.last_ticket_date|date }}</small>
@@ -133,7 +133,7 @@
                 <div class="card-body">
                     <div class="text-center">
                         <i class="fas fa-hand-holding-usd fa-2x text-success mb-2"></i>
-                        <h3 class="mb-0">{{ customer.total_payments }}</h3>
+                        <h3 class="mb-0">{{ payments|length }}</h3>
                         <p class="text-muted mb-0">Total Payments</p>
                         {% if customer.last_payment_date %}
                         <small class="text-muted">Last: {{ customer.last_payment_date|date }}</small>

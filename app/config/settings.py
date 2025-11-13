@@ -57,7 +57,7 @@ class DevelopmentConfig(Config):
     # Development database (SQLite)
     SQLALCHEMY_DATABASE_URI = os.getenv(
         'DATABASE_URL',
-        'sqlite:///churn_platform.db'
+        'sqlite:///instance/churn_platform.db'
     )
     
     # Less strict security for development

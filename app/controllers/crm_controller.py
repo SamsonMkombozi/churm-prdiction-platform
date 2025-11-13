@@ -495,8 +495,8 @@ def customer_detail(customer_id):
     return render_template('crm/customer_detail.html',
                          company=company,
                          customer=customer,
-                         recent_payments=recent_payments,
-                         recent_tickets=recent_tickets)
+                         payments=recent_payments,  # Template expects 'payments'
+                         tickets=recent_tickets)    # Template expects 'tickets'
 
 @crm_bp.route('/tickets/<int:ticket_id>')
 @login_required
