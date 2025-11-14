@@ -1,20 +1,19 @@
 """
-Enhanced CRM Controller with Selective Sync Support - COMPLETELY FIXED VERSION
+Enhanced CRM Controller with Integrated Payment-Based Predictions
 app/controllers/crm_controller.py
 
-✅ FIXES:
-1. Pass company variable to all templates
-2. Pass pagination objects correctly
-3. Pass filter variables for template compatibility
-4. Proper error handling for missing data
-5. Use last_sync_at instead of last_sync throughout
+✅ ENHANCED FEATURES:
+1. Integrated payment-based churn prediction from n.py
+2. Multi-table customer mapping (crm_customers, crm_tickets, nav_mpesa_transactions, spl_statistics)
+3. Real-time risk assessment and prediction generation
+4. Enhanced sync performance with prediction analytics
 """
 
 from flask import Blueprint, render_template, request, jsonify, current_app, redirect, url_for
 from flask_login import login_required, current_user
 from app.models import Customer, Payment, Ticket
 from app.models.company import Company 
-from app.services.crm_service import EnhancedCRMService
+from app.services.crm_service import EnhancedCRMServiceWithPredictions
 from app.extensions import db
 from sqlalchemy import func, desc, or_
 from datetime import datetime, timedelta
@@ -25,18 +24,18 @@ crm_bp = Blueprint('crm', __name__)
 @crm_bp.route('/dashboard')
 @login_required
 def dashboard():
-    """Enhanced CRM Dashboard with PostgreSQL support - FIXED VERSION"""
+    """Enhanced CRM Dashboard with integrated payment-based predictions"""
     
     company = current_user.company
     if not company:
         return redirect(url_for('dashboard.index'))
     
     try:
-        # Get connection information
-        crm_service = EnhancedCRMService(company)
+        # Get enhanced connection information with prediction capabilities
+        crm_service = EnhancedCRMServiceWithPredictions(company)
         connection_info = crm_service.get_connection_info()
         
-        # ✅ FIX: Use correct attribute names from Company model
+        # ✅ ENHANCED: Include prediction statistics
         stats = {
             'customers': Customer.query.filter_by(company_id=company.id).count(),
             'active_customers': Customer.query.filter_by(company_id=company.id, status='active').count(),
@@ -44,23 +43,48 @@ def dashboard():
             'open_tickets': Ticket.query.filter_by(company_id=company.id, status='open').count(),
             'payments': Payment.query.filter_by(company_id=company.id).count(),
             'total_revenue': db.session.query(func.sum(Payment.amount)).filter_by(company_id=company.id).scalar() or 0,
-            'last_sync': company.last_sync_at,  # ✅ FIX: Use last_sync_at instead of last_sync
-            'sync_status': company.sync_status or 'never'
+            'last_sync': company.last_sync_at,
+            'sync_status': company.sync_status or 'never',
+            
+            # ✅ NEW: Prediction statistics
+            'high_risk_customers': Customer.query.filter_by(company_id=company.id, churn_risk='high').count(),
+            'medium_risk_customers': Customer.query.filter_by(company_id=company.id, churn_risk='medium').count(),
+            'low_risk_customers': Customer.query.filter_by(company_id=company.id, churn_risk='low').count(),
+            'customers_with_predictions': Customer.query.filter(
+                Customer.company_id == company.id,
+                Customer.churn_probability.isnot(None)
+            ).count(),
+            'avg_churn_probability': db.session.query(func.avg(Customer.churn_probability))\
+                .filter_by(company_id=company.id)\
+                .filter(Customer.churn_probability.isnot(None))\
+                .scalar() or 0
         }
         
-        # Get recent customers
+        # Get recent customers with enhanced payment-based metrics
         recent_customers = Customer.query.filter_by(company_id=company.id)\
             .order_by(desc(Customer.created_at))\
             .limit(10)\
             .all()
         
-        # Calculate tenure for customers
+        # Calculate enhanced tenure and payment metrics for display
         for customer in recent_customers:
-            if customer.signup_date:  # ✅ FIX: Use signup_date instead of contract_start_date
+            if customer.signup_date:
                 tenure_delta = datetime.utcnow() - customer.signup_date
                 customer.tenure_months = max(1, tenure_delta.days // 30)
             else:
                 customer.tenure_months = 0
+            
+            # Add payment behavior indicator (from n.py logic)
+            if hasattr(customer, 'last_payment_date') and customer.last_payment_date:
+                days_since_payment = (datetime.utcnow() - customer.last_payment_date).days
+                if days_since_payment >= 90:
+                    customer.payment_status = 'high_risk'
+                elif days_since_payment >= 60:
+                    customer.payment_status = 'medium_risk'
+                else:
+                    customer.payment_status = 'good'
+            else:
+                customer.payment_status = 'no_data'
         
         return render_template('crm/dashboard.html',
                              company=company,
@@ -69,25 +93,22 @@ def dashboard():
                              recent_customers=recent_customers)
     
     except Exception as e:
-        current_app.logger.error(f"Dashboard error: {str(e)}")
+        current_app.logger.error(f"Enhanced dashboard error: {str(e)}")
         current_app.logger.error(traceback.format_exc())
         
-        # Fallback data in case of errors
+        # Fallback data
         connection_info = {
             'postgresql_configured': False,
             'api_configured': False,
-            'preferred_method': 'none'
+            'preferred_method': 'none',
+            'prediction_enabled': False
         }
         
         stats = {
-            'customers': 0,
-            'active_customers': 0,
-            'tickets': 0,
-            'open_tickets': 0,
-            'payments': 0,
-            'total_revenue': 0,
-            'last_sync': None,
-            'sync_status': 'error'
+            'customers': 0, 'active_customers': 0, 'tickets': 0, 'open_tickets': 0,
+            'payments': 0, 'total_revenue': 0, 'last_sync': None, 'sync_status': 'error',
+            'high_risk_customers': 0, 'medium_risk_customers': 0, 'low_risk_customers': 0,
+            'customers_with_predictions': 0, 'avg_churn_probability': 0
         }
         
         return render_template('crm/dashboard.html',
@@ -100,27 +121,32 @@ def dashboard():
 @crm_bp.route('/sync', methods=['POST'])
 @login_required
 def sync():
-    """Enhanced selective sync endpoint - FIXED VERSION"""
+    """Enhanced selective sync with integrated payment-based predictions"""
     
     company = current_user.company
     if not company:
         return jsonify({'success': False, 'message': 'No company associated with user'}), 400
     
     try:
-        # Get sync options from request
+        # Get enhanced sync options with prediction generation
         sync_options = request.get_json() or {}
         
-        # Default to all enabled if no options provided
+        # ✅ ENHANCED: Default to all enabled including predictions
         if not sync_options:
             sync_options = {
                 'sync_customers': True,
                 'sync_payments': True,
                 'sync_tickets': True,
-                'sync_usage': False
+                'sync_usage': True,
+                'generate_predictions': True  # NEW: Enable predictions by default
             }
         
-        current_app.logger.info(f"Starting selective sync for {company.name}")
-        current_app.logger.info(f"Sync options: {sync_options}")
+        # Ensure prediction generation is included
+        if 'generate_predictions' not in sync_options:
+            sync_options['generate_predictions'] = True
+        
+        current_app.logger.info(f"Starting enhanced sync with predictions for {company.name}")
+        current_app.logger.info(f"Enhanced sync options: {sync_options}")
         
         # Check if at least one option is selected
         if not any(sync_options.values()):
@@ -136,8 +162,8 @@ def sync():
                 'message': 'Sync already in progress. Please wait for it to complete.'
             }), 409
         
-        # Initialize CRM service
-        crm_service = EnhancedCRMService(company)
+        # Initialize enhanced CRM service with predictions
+        crm_service = EnhancedCRMServiceWithPredictions(company)
         
         # Check connection
         connection_info = crm_service.get_connection_info()
@@ -148,11 +174,11 @@ def sync():
                 'message': 'No sync method configured. Please configure PostgreSQL or API connection in Company Settings.'
             }), 400
         
-        # Start sync
+        # Start enhanced sync with predictions
         result = crm_service.sync_data_selective(sync_options)
         
         if result['success']:
-            # Build success message with sync details
+            # Build enhanced success message with prediction details
             stats = result['stats']
             sync_summary = []
             
@@ -171,22 +197,39 @@ def sync():
                 if ticket_total > 0:
                     sync_summary.append(f"{ticket_total} tickets")
             
-            message = f"Successfully synced {', '.join(sync_summary) if sync_summary else 'data'}"
+            if sync_options.get('sync_usage'):
+                usage_total = stats['usage_stats']['new'] + stats['usage_stats']['updated']
+                if usage_total > 0:
+                    sync_summary.append(f"{usage_total} usage records")
             
-            # Add performance info if available
+            # ✅ ENHANCED: Include prediction summary
+            if sync_options.get('generate_predictions') and 'predictions' in stats:
+                pred_total = stats['predictions']['generated']
+                if pred_total > 0:
+                    sync_summary.append(f"{pred_total} predictions")
+            
+            message = f"Enhanced sync completed: {', '.join(sync_summary) if sync_summary else 'data'}"
+            
+            # Add performance info with prediction details
             if 'performance' in result:
                 perf = result['performance']
-                if perf.get('connection_method') == 'postgresql':
-                    message += f" via PostgreSQL in {perf['sync_duration']}s"
-                else:
-                    message += f" via API"
+                message += f" via {perf.get('connection_method', 'PostgreSQL')} in {perf['sync_duration']}s"
+                
+                if perf.get('predictions_generated', 0) > 0:
+                    message += f" with {perf['predictions_generated']} churn predictions"
             
-            return jsonify({
+            # ✅ ENHANCED: Include prediction summary in response
+            response_data = {
                 'success': True,
                 'message': message,
                 'stats': stats,
                 'performance': result.get('performance', {})
-            })
+            }
+            
+            if 'prediction_summary' in result:
+                response_data['prediction_summary'] = result['prediction_summary']
+            
+            return jsonify(response_data)
         else:
             return jsonify({
                 'success': False,
@@ -195,7 +238,7 @@ def sync():
             }), 500
     
     except Exception as e:
-        current_app.logger.error(f"Sync error: {str(e)}")
+        current_app.logger.error(f"Enhanced sync error: {str(e)}")
         current_app.logger.error(traceback.format_exc())
         
         # Update company status
@@ -205,82 +248,164 @@ def sync():
         
         return jsonify({
             'success': False,
-            'message': f"Sync failed: {str(e)}"
+            'message': f"Enhanced sync failed: {str(e)}"
         }), 500
 
 @crm_bp.route('/sync/status')
 @login_required
 def sync_status():
-    """Get current sync status - FIXED VERSION"""
+    """Get enhanced sync status with prediction info"""
     
     company = current_user.company
     if not company:
         return jsonify({'error': 'No company found'}), 404
     
-    # ✅ FIX: Use last_sync_at instead of last_sync
+    # Get prediction statistics
+    try:
+        prediction_stats = {
+            'total_predictions': Customer.query.filter(
+                Customer.company_id == company.id,
+                Customer.churn_probability.isnot(None)
+            ).count(),
+            'high_risk': Customer.query.filter_by(company_id=company.id, churn_risk='high').count(),
+            'medium_risk': Customer.query.filter_by(company_id=company.id, churn_risk='medium').count(),
+            'low_risk': Customer.query.filter_by(company_id=company.id, churn_risk='low').count(),
+            'last_prediction': db.session.query(func.max(Customer.last_prediction_date))\
+                .filter_by(company_id=company.id).scalar()
+        }
+    except Exception as e:
+        current_app.logger.warning(f"Error getting prediction stats: {e}")
+        prediction_stats = {
+            'total_predictions': 0, 'high_risk': 0, 'medium_risk': 0, 'low_risk': 0, 'last_prediction': None
+        }
+    
     return jsonify({
         'status': company.sync_status or 'never',
         'last_sync': company.last_sync_at.isoformat() if company.last_sync_at else None,
         'error': company.sync_error,
-        'total_syncs': company.total_syncs or 0
+        'total_syncs': company.total_syncs or 0,
+        'prediction_stats': prediction_stats  # ✅ NEW: Include prediction statistics
     })
 
 @crm_bp.route('/connection/test')
 @login_required
 def test_connection():
-    """Test CRM connection"""
+    """Test enhanced CRM connection with prediction capabilities"""
     
     company = current_user.company
     if not company:
         return jsonify({'success': False, 'message': 'No company found'}), 404
     
     try:
-        crm_service = EnhancedCRMService(company)
-        connection_info = crm_service.get_connection_info()
+        crm_service = EnhancedCRMServiceWithPredictions(company)
+        test_result = crm_service.test_postgresql_connection()
         
-        if connection_info['postgresql_configured']:
-            # Test PostgreSQL connection
-            if crm_service.test_postgresql_connection():
-                return jsonify({
-                    'success': True,
-                    'message': '✅ Direct PostgreSQL connection successful! This will be used for faster sync.',
-                    'connection_type': 'postgresql'
-                })
-            else:
-                return jsonify({
-                    'success': False,
-                    'message': '❌ PostgreSQL connection failed. Check your configuration.',
-                    'connection_type': 'postgresql'
-                })
-        
-        elif connection_info['api_configured']:
-            # Test API connection (you can implement this)
-            return jsonify({
-                'success': True,
-                'message': '✅ API connection available (fallback method).',
-                'connection_type': 'api'
-            })
-        
-        else:
-            return jsonify({
-                'success': False,
-                'message': '❌ No connection method configured.',
-                'connection_type': 'none'
-            })
+        return jsonify(test_result)
     
     except Exception as e:
-        current_app.logger.error(f"Connection test error: {str(e)}")
+        current_app.logger.error(f"Enhanced connection test error: {str(e)}")
         return jsonify({
             'success': False,
-            'message': f'Connection test failed: {str(e)}',
+            'message': f'Enhanced connection test failed: {str(e)}',
             'connection_type': 'error'
         }), 500
 
-# ✅ FIXED: Customer management page with all required template variables
+# ✅ NEW: Prediction-specific routes
+
+@crm_bp.route('/predictions/summary')
+@login_required
+def prediction_summary():
+    """Get comprehensive prediction summary"""
+    
+    company = current_user.company
+    if not company:
+        return jsonify({'error': 'No company found'}), 404
+    
+    try:
+        # Get prediction distribution
+        prediction_stats = {
+            'total_customers': Customer.query.filter_by(company_id=company.id).count(),
+            'customers_with_predictions': Customer.query.filter(
+                Customer.company_id == company.id,
+                Customer.churn_probability.isnot(None)
+            ).count(),
+            'high_risk': Customer.query.filter_by(company_id=company.id, churn_risk='high').count(),
+            'medium_risk': Customer.query.filter_by(company_id=company.id, churn_risk='medium').count(),
+            'low_risk': Customer.query.filter_by(company_id=company.id, churn_risk='low').count(),
+            'avg_churn_probability': float(db.session.query(func.avg(Customer.churn_probability))\
+                .filter_by(company_id=company.id)\
+                .filter(Customer.churn_probability.isnot(None))\
+                .scalar() or 0),
+            'last_prediction_date': db.session.query(func.max(Customer.last_prediction_date))\
+                .filter_by(company_id=company.id).scalar()
+        }
+        
+        # Get high-risk customers for immediate action
+        high_risk_customers = Customer.query.filter_by(
+            company_id=company.id,
+            churn_risk='high'
+        ).order_by(desc(Customer.churn_probability)).limit(10).all()
+        
+        high_risk_list = []
+        for customer in high_risk_customers:
+            high_risk_list.append({
+                'id': customer.id,
+                'name': customer.customer_name,
+                'probability': customer.churn_probability,
+                'phone': customer.phone,
+                'last_payment_date': customer.last_payment_date.isoformat() if hasattr(customer, 'last_payment_date') and customer.last_payment_date else None
+            })
+        
+        return jsonify({
+            'success': True,
+            'prediction_stats': prediction_stats,
+            'high_risk_customers': high_risk_list
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Prediction summary error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get prediction summary: {str(e)}'
+        }), 500
+
+@crm_bp.route('/predictions/regenerate', methods=['POST'])
+@login_required
+def regenerate_predictions():
+    """Regenerate predictions for all customers"""
+    
+    company = current_user.company
+    if not company:
+        return jsonify({'success': False, 'message': 'No company found'}), 400
+    
+    try:
+        # Start prediction generation only
+        sync_options = {
+            'sync_customers': False,
+            'sync_payments': False,
+            'sync_tickets': False,
+            'sync_usage': False,
+            'generate_predictions': True
+        }
+        
+        crm_service = EnhancedCRMServiceWithPredictions(company)
+        result = crm_service.sync_data_selective(sync_options)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        current_app.logger.error(f"Prediction regeneration error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to regenerate predictions: {str(e)}'
+        }), 500
+
+# ✅ PRESERVED: All existing customer, payment, and ticket management routes with enhanced features
+
 @crm_bp.route('/customers')
 @login_required
 def customers():
-    """Customer management page - COMPLETELY FIXED VERSION"""
+    """Enhanced customer management page with prediction filtering"""
     
     company = current_user.company
     if not company:
@@ -292,13 +417,16 @@ def customers():
         risk_filter = request.args.get('risk', '')
         search_filter = request.args.get('search', '')
         
-        # Get customers with pagination and filters
+        # ✅ NEW: Payment behavior filter (from n.py logic)
+        payment_filter = request.args.get('payment_behavior', '')
+        
+        # Get customers with pagination and enhanced filters
         page = request.args.get('page', 1, type=int)
         per_page = 50
         
         query = Customer.query.filter_by(company_id=company.id)
         
-        # Apply filters
+        # Apply existing filters
         if status_filter:
             query = query.filter_by(status=status_filter)
         if risk_filter:
@@ -311,27 +439,40 @@ def customers():
                 )
             )
         
-        # Calculate tenure for display
-        for customer in query.all():
+        # ✅ NEW: Payment behavior filter
+        if payment_filter == 'no_payments':
+            query = query.filter(
+                or_(Customer.total_payments == 0, Customer.total_payments.is_(None))
+            )
+        elif payment_filter == 'poor_payer':
+            # Customers with high churn probability due to payment issues
+            query = query.filter(Customer.churn_risk == 'high')
+        elif payment_filter == 'good_payer':
+            # Customers with recent payments and low risk
+            query = query.filter(Customer.churn_risk == 'low')
+        
+        # Calculate enhanced tenure and payment metrics for display
+        customers_query = query.order_by(desc(Customer.created_at))
+        pagination = customers_query.paginate(page=page, per_page=per_page, error_out=False)
+        
+        for customer in pagination.items:
             if customer.signup_date:
                 tenure_delta = datetime.utcnow() - customer.signup_date
                 customer.tenure_months = max(1, tenure_delta.days // 30)
             else:
                 customer.tenure_months = 0
         
-        pagination = query.order_by(desc(Customer.created_at))\
-            .paginate(page=page, per_page=per_page, error_out=False)
-        
         return render_template('crm/customers.html', 
-                             company=company,  # ✅ FIX: Pass company
-                             customers=pagination.items,  # ✅ FIX: Use pagination.items
-                             pagination=pagination,  # ✅ FIX: Pass pagination object
-                             current_status=status_filter,  # ✅ FIX: Pass current filters
+                             company=company,
+                             customers=pagination.items,
+                             pagination=pagination,
+                             current_status=status_filter,
                              current_risk=risk_filter,
-                             current_search=search_filter)
+                             current_search=search_filter,
+                             current_payment_behavior=payment_filter)  # ✅ NEW filter
                              
     except Exception as e:
-        current_app.logger.error(f"Customers page error: {str(e)}")
+        current_app.logger.error(f"Enhanced customers page error: {str(e)}")
         current_app.logger.error(traceback.format_exc())
         
         # Return safe fallback
@@ -339,17 +480,16 @@ def customers():
                              company=company,
                              customers=[],
                              pagination=type('Pagination', (), {'total': 0, 'pages': 1, 'page': 1, 'per_page': 50, 'has_prev': False, 'has_next': False})(),
-                             current_status='',
-                             current_risk='',
-                             current_search='',
+                             current_status='', current_risk='', current_search='', current_payment_behavior='',
                              error_message=str(e))
 
-# ✅ FIXED: Payment management page with all required template variables
+# ✅ PRESERVED: All other existing routes (payments, tickets, customer_detail, ticket_detail) remain the same
+# Just import them from the original controller or copy them here
+
 @crm_bp.route('/payments')
 @login_required
 def payments():
-    """Payment management page - COMPLETELY FIXED VERSION"""
-    
+    """Payment management page - PRESERVED FROM ORIGINAL"""
     company = current_user.company
     if not company:
         return redirect(url_for('dashboard.index'))
@@ -383,10 +523,10 @@ def payments():
             .paginate(page=page, per_page=per_page, error_out=False)
         
         return render_template('crm/payments.html',
-                             company=company,  # ✅ FIX: Pass company
-                             payments=pagination.items,  # ✅ FIX: Use pagination.items
-                             pagination=pagination,  # ✅ FIX: Pass pagination object
-                             current_status=status_filter,  # ✅ FIX: Pass current filters
+                             company=company,
+                             payments=pagination.items,
+                             pagination=pagination,
+                             current_status=status_filter,
                              current_method=method_filter,
                              current_search=search_filter)
                              
@@ -399,17 +539,13 @@ def payments():
                              company=company,
                              payments=[],
                              pagination=type('Pagination', (), {'total': 0, 'pages': 1, 'page': 1, 'per_page': 50, 'has_prev': False, 'has_next': False})(),
-                             current_status='',
-                             current_method='',
-                             current_search='',
+                             current_status='', current_method='', current_search='',
                              error_message=str(e))
 
-# ✅ FIXED: Ticket management page with all required template variables
 @crm_bp.route('/tickets')
 @login_required
 def tickets():
-    """Ticket management page - COMPLETELY FIXED VERSION"""
-    
+    """Ticket management page - PRESERVED FROM ORIGINAL"""
     company = current_user.company
     if not company:
         return redirect(url_for('dashboard.index'))
@@ -443,10 +579,10 @@ def tickets():
             .paginate(page=page, per_page=per_page, error_out=False)
         
         return render_template('crm/tickets.html',
-                             company=company,  # ✅ FIX: Pass company
-                             tickets=pagination.items,  # ✅ FIX: Use pagination.items
-                             pagination=pagination,  # ✅ FIX: Pass pagination object
-                             current_status=status_filter,  # ✅ FIX: Pass current filters
+                             company=company,
+                             tickets=pagination.items,
+                             pagination=pagination,
+                             current_status=status_filter,
                              current_priority=priority_filter,
                              current_search=search_filter)
                              
@@ -459,16 +595,13 @@ def tickets():
                              company=company,
                              tickets=[],
                              pagination=type('Pagination', (), {'total': 0, 'pages': 1, 'page': 1, 'per_page': 50, 'has_prev': False, 'has_next': False})(),
-                             current_status='',
-                             current_priority='',
-                             current_search='',
+                             current_status='', current_priority='', current_search='',
                              error_message=str(e))
 
-# ✅ BONUS: Detail pages for individual records
 @crm_bp.route('/customers/<int:customer_id>')
 @login_required
 def customer_detail(customer_id):
-    """Customer detail page"""
+    """Enhanced customer detail page with payment-based insights"""
     company = current_user.company
     if not company:
         return redirect(url_for('dashboard.index'))
@@ -478,10 +611,30 @@ def customer_detail(customer_id):
         company_id=company.id
     ).first_or_404()
     
-    # Calculate tenure
+    # Calculate enhanced tenure
     if customer.signup_date:
         tenure_delta = datetime.utcnow() - customer.signup_date
         customer.tenure_months = max(1, tenure_delta.days // 30)
+    
+    # ✅ ENHANCED: Add payment behavior analysis
+    if hasattr(customer, 'last_payment_date') and customer.last_payment_date:
+        days_since_payment = (datetime.utcnow() - customer.last_payment_date).days
+        customer.days_since_last_payment = days_since_payment
+        
+        # Apply n.py risk logic for display
+        if days_since_payment >= 90:
+            customer.payment_risk_level = 'HIGH'
+            customer.payment_risk_message = f"No payments for {days_since_payment} days - URGENT ACTION REQUIRED"
+        elif days_since_payment >= 60:
+            customer.payment_risk_level = 'MEDIUM'
+            customer.payment_risk_message = f"No payments for {days_since_payment} days - Monitor closely"
+        else:
+            customer.payment_risk_level = 'LOW'
+            customer.payment_risk_message = f"Recent payment ({days_since_payment} days ago) - Good standing"
+    else:
+        customer.payment_risk_level = 'UNKNOWN'
+        customer.payment_risk_message = "No payment data available"
+        customer.days_since_last_payment = None
     
     # Get recent payments and tickets
     recent_payments = Payment.query.filter_by(
@@ -495,13 +648,13 @@ def customer_detail(customer_id):
     return render_template('crm/customer_detail.html',
                          company=company,
                          customer=customer,
-                         payments=recent_payments,  # Template expects 'payments'
-                         tickets=recent_tickets)    # Template expects 'tickets'
+                         payments=recent_payments,
+                         tickets=recent_tickets)
 
 @crm_bp.route('/tickets/<int:ticket_id>')
 @login_required
 def ticket_detail(ticket_id):
-    """Ticket detail page"""
+    """Ticket detail page - PRESERVED FROM ORIGINAL"""
     company = current_user.company
     if not company:
         return redirect(url_for('dashboard.index'))

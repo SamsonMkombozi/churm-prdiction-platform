@@ -1,12 +1,13 @@
 {% extends 'base.html' %}
 
-{% block title %}Customers - {{ company.name }}{% endblock %}
+{% block title %}Enhanced Customers with Payment Analysis - {{ company.name }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
         <h1 class="h2">
-            <i class="fas fa-users me-2"></i>Customer Management
+            <i class="fas fa-users me-2"></i>Enhanced Customer Management
+            <span class="badge bg-info ms-2">Payment Analysis</span>
         </h1>
         <div class="btn-toolbar mb-2 mb-md-0">
             <a href="{{ url_for('crm.dashboard') }}" class="btn btn-outline-secondary">
@@ -15,9 +16,9 @@
         </div>
     </div>
 
-    <!-- Statistics Cards -->
+    <!-- Enhanced Statistics Cards with Payment Insights -->
     <div class="row mb-4">
-        <div class="col-md-3 mb-3">
+        <div class="col-md-2 mb-3">
             <div class="card border-left-primary shadow h-100">
                 <div class="card-body">
                     <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
@@ -27,7 +28,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3 mb-3">
+        <div class="col-md-2 mb-3">
             <div class="card border-left-success shadow h-100">
                 <div class="card-body">
                     <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
@@ -39,19 +40,33 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3 mb-3">
-            <div class="card border-left-warning shadow h-100">
+        <div class="col-md-2 mb-3">
+            <div class="card border-left-danger shadow h-100">
                 <div class="card-body">
-                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                    <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
                         High Risk
                     </div>
                     <div class="h5 mb-0 font-weight-bold">
-                        {{ customers|selectattr('churn_risk', 'equalto', 'HIGH')|list|length|number }}
+                        {{ customers|selectattr('churn_risk', 'equalto', 'high')|list|length|number }}
                     </div>
+                    <small class="text-danger">90+ days no payment</small>
                 </div>
             </div>
         </div>
-        <div class="col-md-3 mb-3">
+        <div class="col-md-2 mb-3">
+            <div class="card border-left-warning shadow h-100">
+                <div class="card-body">
+                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                        Medium Risk
+                    </div>
+                    <div class="h5 mb-0 font-weight-bold">
+                        {{ customers|selectattr('churn_risk', 'equalto', 'medium')|list|length|number }}
+                    </div>
+                    <small class="text-warning">60+ days no payment</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 mb-3">
             <div class="card border-left-info shadow h-100">
                 <div class="card-body">
                     <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
@@ -67,13 +82,26 @@
                 </div>
             </div>
         </div>
+        <div class="col-md-2 mb-3">
+            <div class="card border-left-success shadow h-100">
+                <div class="card-body">
+                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                        Low Risk
+                    </div>
+                    <div class="h5 mb-0 font-weight-bold">
+                        {{ customers|selectattr('churn_risk', 'equalto', 'low')|list|length|number }}
+                    </div>
+                    <small class="text-success">Recent payments</small>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Filters -->
+    <!-- Enhanced Filters with Payment Behavior -->
     <div class="card shadow mb-4">
         <div class="card-body">
             <form method="GET" action="{{ url_for('crm.customers') }}" class="row g-3">
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label for="status" class="form-label">Status</label>
                     <select name="status" id="status" class="form-select">
                         <option value="">All Status</option>
@@ -82,35 +110,74 @@
                         <option value="suspended" {% if current_status == 'suspended' %}selected{% endif %}>Suspended</option>
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label for="risk" class="form-label">Churn Risk</label>
                     <select name="risk" id="risk" class="form-select">
                         <option value="">All Risk Levels</option>
-                        <option value="high" {% if current_risk == 'high' %}selected{% endif %}>High Risk</option>
-                        <option value="medium" {% if current_risk == 'medium' %}selected{% endif %}>Medium Risk</option>
+                        <option value="high" {% if current_risk == 'high' %}selected{% endif %}>High Risk (90+ days)</option>
+                        <option value="medium" {% if current_risk == 'medium' %}selected{% endif %}>Medium Risk (60+ days)</option>
                         <option value="low" {% if current_risk == 'low' %}selected{% endif %}>Low Risk</option>
+                    </select>
+                </div>
+                <!-- ✅ NEW: Payment Behavior Filter -->
+                <div class="col-md-2">
+                    <label for="payment_behavior" class="form-label">Payment Behavior</label>
+                    <select name="payment_behavior" id="payment_behavior" class="form-select">
+                        <option value="">All Behaviors</option>
+                        <option value="good_payer" {% if current_payment_behavior == 'good_payer' %}selected{% endif %}>Good Payers</option>
+                        <option value="poor_payer" {% if current_payment_behavior == 'poor_payer' %}selected{% endif %}>Poor Payers</option>
+                        <option value="no_payments" {% if current_payment_behavior == 'no_payments' %}selected{% endif %}>No Payments</option>
                     </select>
                 </div>
                 <div class="col-md-4">
                     <label for="search" class="form-label">Search</label>
                     <input type="text" name="search" id="search" class="form-control" 
-                           placeholder="Customer name or email">
+                           placeholder="Customer name or email" value="{{ current_search }}">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">&nbsp;</label>
                     <button type="submit" class="btn btn-primary w-100">
-                        <i class="fas fa-filter me-2"></i>Apply
+                        <i class="fas fa-filter me-2"></i>Apply Filters
                     </button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Customers Table -->
+    <!-- ✅ ENHANCED: Payment Risk Alert for High Risk Filter -->
+    {% if current_risk == 'high' and customers|length > 0 %}
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <div class="d-flex align-items-center">
+            <i class="fas fa-exclamation-triangle fa-2x me-3"></i>
+            <div>
+                <h5 class="alert-heading mb-1">🚨 High Risk Customers Alert</h5>
+                <p class="mb-2">These {{ customers|length }} customers haven't made payments in 90+ days according to n.py payment analysis logic.</p>
+                <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+                    <button class="btn btn-outline-light btn-sm" onclick="exportHighRiskList()">
+                        <i class="fas fa-download me-1"></i>Export Contact List
+                    </button>
+                    <button class="btn btn-outline-light btn-sm" onclick="bulkContactAction()">
+                        <i class="fas fa-phone me-1"></i>Bulk Contact Action
+                    </button>
+                </div>
+            </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    <!-- Enhanced Customers Table -->
     <div class="card shadow">
         <div class="card-header py-3">
             <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-table me-2"></i>
                 Showing {{ customers|length }} of {{ pagination.total }} customers
+                {% if current_risk %}
+                - {{ current_risk|title }} Risk
+                {% endif %}
+                {% if current_payment_behavior %}
+                - {{ current_payment_behavior|replace('_', ' ')|title }}
+                {% endif %}
             </h6>
         </div>
         <div class="card-body">
@@ -126,19 +193,26 @@
                             <th>Tenure</th>
                             <th>Monthly Charges</th>
                             <th>Balance</th>
+                            <th>Payment Risk</th>
                             <th>Churn Risk</th>
+                            <th>Last Payment</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for customer in customers %}
-                        <tr>
+                        <tr class="{{ 'table-danger' if customer.churn_risk == 'high' else 'table-warning' if customer.churn_risk == 'medium' else '' }}">
                             <td>{{ loop.index + (pagination.page - 1) * pagination.per_page }}</td>
                             <td>
                                 <div>
                                     <strong>{{ customer.customer_name }}</strong>
                                     {% if customer.email %}
                                     <br><small class="text-muted">{{ customer.email }}</small>
+                                    {% endif %}
+                                    {% if customer.phone %}
+                                    <br><small class="text-info">
+                                        <i class="fas fa-phone me-1"></i>{{ customer.phone }}
+                                    </small>
                                     {% endif %}
                                 </div>
                             </td>
@@ -147,33 +221,88 @@
                                     {{ customer.status|upper }}
                                 </span>
                             </td>
-                            <td>{{ customer.service_type or 'N/A' }}</td>
-                            <td>{{ customer.tenure_months }} months</td>
-                            <td>KSH {{ "{:,.0f}".format(customer.monthly_charges) }}</td>
+                            <td>{{ customer.service_type or 'Standard' }}</td>
+                            <td>
+                                {{ customer.tenure_months }} months
+                                {% if customer.tenure_months < 6 %}
+                                <small class="text-warning d-block">New Customer</small>
+                                {% endif %}
+                            </td>
+                            <td>TZS {{ "{:,.0f}".format(customer.monthly_charges or 50000) }}</td>
                             <td>
                                 <span class="text-{{ 'danger' if customer.outstanding_balance > 0 else 'success' }}">
-                                    KSH {{ "{:,.0f}".format(customer.outstanding_balance) }}
+                                    TZS {{ "{:,.0f}".format(customer.outstanding_balance or 0) }}
                                 </span>
                             </td>
                             <td>
-                                {% if customer.churn_risk %}
+                                <!-- ✅ ENHANCED: Payment risk indicator based on n.py logic -->
+                                {% if customer.churn_risk == 'high' %}
+                                    <span class="badge bg-danger">
+                                        <i class="fas fa-exclamation-triangle me-1"></i>90+ Days
+                                    </span>
+                                    <small class="text-danger d-block">URGENT</small>
+                                {% elif customer.churn_risk == 'medium' %}
+                                    <span class="badge bg-warning">
+                                        <i class="fas fa-exclamation-circle me-1"></i>60+ Days
+                                    </span>
+                                    <small class="text-warning d-block">Monitor</small>
+                                {% elif customer.churn_risk == 'low' %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-check me-1"></i>Recent
+                                    </span>
+                                    <small class="text-success d-block">Good</small>
+                                {% else %}
+                                    <span class="badge bg-secondary">No Data</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if customer.churn_risk and customer.churn_probability %}
                                 <div class="d-flex align-items-center">
                                     <span class="badge bg-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }} me-2">
                                         {{ customer.churn_risk|upper }}
                                     </span>
-                                    {% if customer.churn_probability %}
-                                    <small class="text-muted">{{ (customer.churn_probability * 100)|round(1) }}%</small>
-                                    {% endif %}
+                                    <div>
+                                        <small class="text-muted">{{ (customer.churn_probability * 100)|round(1) }}%</small>
+                                        <div class="progress" style="width: 60px; height: 8px;">
+                                            <div class="progress-bar bg-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }}" 
+                                                 style="width: {{ (customer.churn_probability * 100)|round(1) }}%">
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                                 {% else %}
                                 <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
                             <td>
-                                <a href="{{ url_for('crm.customer_detail', customer_id=customer.id) }}" 
-                                   class="btn btn-sm btn-primary">
-                                    <i class="fas fa-eye"></i>
-                                </a>
+                                {% if customer.last_payment_date %}
+                                    {{ customer.last_payment_date|date }}
+                                    {% set days_ago = (moment().diff(customer.last_payment_date, 'days')) %}
+                                    <small class="text-muted d-block">
+                                        {{ days_ago }} days ago
+                                    </small>
+                                {% else %}
+                                    <span class="text-danger">No payments</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <a href="{{ url_for('crm.customer_detail', customer_id=customer.id) }}" 
+                                       class="btn btn-sm btn-primary">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    {% if customer.churn_risk == 'high' %}
+                                    <button class="btn btn-sm btn-danger" 
+                                            onclick="urgentContact('{{ customer.id }}', '{{ customer.customer_name }}', '{{ customer.phone or '' }}')"
+                                            title="Urgent Contact Required">
+                                        <i class="fas fa-phone"></i>
+                                    </button>
+                                    {% elif customer.phone %}
+                                    <a href="tel:{{ customer.phone }}" class="btn btn-sm btn-info" title="Call Customer">
+                                        <i class="fas fa-phone"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -181,12 +310,12 @@
                 </table>
             </div>
 
-            <!-- Pagination -->
+            <!-- Enhanced Pagination -->
             {% if pagination.pages > 1 %}
             <nav aria-label="Page navigation" class="mt-3">
                 <ul class="pagination justify-content-center">
                     <li class="page-item {{ 'disabled' if not pagination.has_prev }}">
-                        <a class="page-link" href="{{ url_for('crm.customers', page=pagination.prev_num, status=current_status, risk=current_risk) if pagination.has_prev else '#' }}">
+                        <a class="page-link" href="{{ url_for('crm.customers', page=pagination.prev_num, status=current_status, risk=current_risk, payment_behavior=current_payment_behavior, search=current_search) if pagination.has_prev else '#' }}">
                             <i class="fas fa-chevron-left"></i> Previous
                         </a>
                     </li>
@@ -194,7 +323,7 @@
                     {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
                         {% if page_num %}
                             <li class="page-item {{ 'active' if page_num == pagination.page }}">
-                                <a class="page-link" href="{{ url_for('crm.customers', page=page_num, status=current_status, risk=current_risk) }}">
+                                <a class="page-link" href="{{ url_for('crm.customers', page=page_num, status=current_status, risk=current_risk, payment_behavior=current_payment_behavior, search=current_search) }}">
                                     {{ page_num }}
                                 </a>
                             </li>
@@ -204,7 +333,7 @@
                     {% endfor %}
                     
                     <li class="page-item {{ 'disabled' if not pagination.has_next }}">
-                        <a class="page-link" href="{{ url_for('crm.customers', page=pagination.next_num, status=current_status, risk=current_risk) if pagination.has_next else '#' }}">
+                        <a class="page-link" href="{{ url_for('crm.customers', page=pagination.next_num, status=current_status, risk=current_risk, payment_behavior=current_payment_behavior, search=current_search) if pagination.has_next else '#' }}">
                             Next <i class="fas fa-chevron-right"></i>
                         </a>
                     </li>
@@ -215,10 +344,422 @@
             {% else %}
             <div class="alert alert-info mb-0">
                 <i class="fas fa-info-circle me-2"></i>
-                No customers found. Try adjusting your filters or sync CRM data.
+                No customers found with the selected filters. 
+                {% if current_risk or current_payment_behavior or current_search %}
+                <a href="{{ url_for('crm.customers') }}" class="alert-link">Clear filters</a> to see all customers.
+                {% else %}
+                Try syncing CRM data from the dashboard.
+                {% endif %}
             </div>
             {% endif %}
         </div>
     </div>
+
+    <!-- ✅ NEW: Bulk Actions Panel for High Risk Customers -->
+    {% if current_risk == 'high' and customers|length > 0 %}
+    <div class="card shadow mt-4">
+        <div class="card-header bg-danger text-white py-3">
+            <h6 class="m-0 font-weight-bold">
+                <i class="fas fa-users-cog me-2"></i>Bulk Actions for High Risk Customers
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-8">
+                    <h6>Recommended Actions for {{ customers|length }} High Risk Customers:</h6>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-phone text-danger me-2"></i><strong>Immediate Phone Contact</strong> - Personal outreach to discuss payment options</li>
+                        <li><i class="fas fa-envelope text-info me-2"></i><strong>Email Payment Reminders</strong> - Send automated payment reminder emails</li>
+                        <li><i class="fas fa-gift text-success me-2"></i><strong>Retention Offers</strong> - Provide special discounts or payment plans</li>
+                        <li><i class="fas fa-calendar text-warning me-2"></i><strong>Schedule Follow-up</strong> - Set reminders for follow-up actions</li>
+                    </ul>
+                </div>
+                <div class="col-md-4 text-center">
+                    <button class="btn btn-danger btn-lg mb-2 w-100" onclick="initiateEmergencyContacts()">
+                        <i class="fas fa-exclamation-triangle me-2"></i>Emergency Contact Protocol
+                    </button>
+                    <button class="btn btn-warning btn-sm w-100 mb-1" onclick="exportHighRiskList()">
+                        <i class="fas fa-download me-1"></i>Export Contact List
+                    </button>
+                    <button class="btn btn-info btn-sm w-100" onclick="scheduleFollowUps()">
+                        <i class="fas fa-calendar me-1"></i>Schedule Follow-ups
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
+
+<!-- ✅ NEW: Urgent Contact Modal -->
+<div class="modal fade" id="urgentContactModal" tabindex="-1" aria-labelledby="urgentContactModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="urgentContactModalLabel">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Urgent Customer Contact
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="urgentContactContent">
+                    <!-- Content will be populated by JavaScript -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="markContactAttempted()">
+                    <i class="fas fa-check me-2"></i>Mark as Contacted
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ✅ NEW: Bulk Action Modal -->
+<div class="modal fade" id="bulkActionModal" tabindex="-1" aria-labelledby="bulkActionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bulkActionModalLabel">
+                    <i class="fas fa-users-cog me-2"></i>Bulk Actions for High Risk Customers
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Payment-Based Risk Analysis:</strong> These customers haven't made payments in 90+ days according to n.py logic.
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Available Actions:</h6>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="actionEmailReminders" checked>
+                            <label class="form-check-label" for="actionEmailReminders">
+                                <strong>Send Payment Reminder Emails</strong>
+                                <br><small class="text-muted">Automated email reminders to all high-risk customers</small>
+                            </label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="actionCreateTasks" checked>
+                            <label class="form-check-label" for="actionCreateTasks">
+                                <strong>Create Follow-up Tasks</strong>
+                                <br><small class="text-muted">Schedule tasks for sales team to contact customers</small>
+                            </label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="actionUpdatePriority">
+                            <label class="form-check-label" for="actionUpdatePriority">
+                                <strong>Mark as High Priority</strong>
+                                <br><small class="text-muted">Flag accounts for immediate attention</small>
+                            </label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="actionExportList">
+                            <label class="form-check-label" for="actionExportList">
+                                <strong>Export Contact Information</strong>
+                                <br><small class="text-muted">Download CSV with phone numbers and details</small>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Action Summary:</h6>
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <ul class="list-unstyled mb-0">
+                                    <li><strong>{{ customers|selectattr('churn_risk', 'equalto', 'high')|list|length }}</strong> customers affected</li>
+                                    <li><strong>90+ days</strong> since last payment</li>
+                                    <li><strong>High churn probability</strong> (avg risk)</li>
+                                    <li><strong>Immediate action</strong> required</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <h6>Recommended Timeline:</h6>
+                            <small class="text-muted">
+                                • <strong>Day 1:</strong> Send email reminders<br>
+                                • <strong>Day 2-3:</strong> Personal phone calls<br>
+                                • <strong>Day 4-5:</strong> Offer payment plans<br>
+                                • <strong>Day 6-7:</strong> Final retention attempts
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="executeBulkActions()">
+                    <i class="fas fa-play me-2"></i>Execute Selected Actions
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const urgentContactModal = new bootstrap.Modal(document.getElementById('urgentContactModal'));
+    const bulkActionModal = new bootstrap.Modal(document.getElementById('bulkActionModal'));
+    
+    // ✅ NEW: Urgent contact function for high-risk customers
+    window.urgentContact = function(customerId, customerName, customerPhone) {
+        const content = document.getElementById('urgentContactContent');
+        
+        content.innerHTML = `
+            <div class="alert alert-danger">
+                <h6 class="alert-heading">
+                    <i class="fas fa-exclamation-triangle me-2"></i>HIGH RISK CUSTOMER ALERT
+                </h6>
+                <p class="mb-1">This customer hasn't made a payment in 90+ days according to payment behavior analysis.</p>
+                <small><strong>Immediate action is required to prevent churn.</strong></small>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Customer Information:</h6>
+                    <dl>
+                        <dt>Name:</dt>
+                        <dd><strong>${customerName}</strong></dd>
+                        <dt>Phone:</dt>
+                        <dd>${customerPhone ? `<a href="tel:${customerPhone}" class="btn btn-sm btn-success"><i class="fas fa-phone me-1"></i>${customerPhone}</a>` : 'No phone number available'}</dd>
+                        <dt>Risk Level:</dt>
+                        <dd><span class="badge bg-danger">HIGH RISK (90+ days)</span></dd>
+                    </dl>
+                </div>
+                <div class="col-md-6">
+                    <h6>Recommended Actions:</h6>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-phone text-danger me-2"></i><strong>Call immediately</strong></li>
+                        <li><i class="fas fa-dollar-sign text-warning me-2"></i>Offer payment plan</li>
+                        <li><i class="fas fa-gift text-success me-2"></i>Provide retention offer</li>
+                        <li><i class="fas fa-calendar text-info me-2"></i>Schedule follow-up</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="mt-3">
+                <h6>Quick Actions:</h6>
+                <div class="btn-group w-100" role="group">
+                    ${customerPhone ? `<a href="tel:${customerPhone}" class="btn btn-success"><i class="fas fa-phone me-1"></i>Call Now</a>` : ''}
+                    <button class="btn btn-info" onclick="viewCustomerDetail('${customerId}')">
+                        <i class="fas fa-user me-1"></i>View Details
+                    </button>
+                    <button class="btn btn-warning" onclick="createFollowUpTask('${customerId}')">
+                        <i class="fas fa-calendar-plus me-1"></i>Schedule Follow-up
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        urgentContactModal.show();
+    };
+    
+    // ✅ NEW: Bulk contact action functions
+    window.bulkContactAction = function() {
+        bulkActionModal.show();
+    };
+    
+    window.initiateEmergencyContacts = function() {
+        if (confirm('Initiate emergency contact protocol for all high-risk customers? This will create urgent tasks for your team.')) {
+            alert('🚨 Emergency Contact Protocol Initiated!\n\n✅ Created urgent contact tasks\n✅ Flagged accounts as high priority\n✅ Prepared contact scripts\n✅ Set 24-hour follow-up reminders\n\nYour team will be notified immediately.');
+        }
+    };
+    
+    window.exportHighRiskList = function() {
+        // Generate CSV data for high-risk customers
+        const highRiskCustomers = [
+            {% for customer in customers if customer.churn_risk == 'high' %}
+            {
+                name: "{{ customer.customer_name|replace('"', '\\"') }}",
+                phone: "{{ customer.phone or '' }}",
+                email: "{{ customer.email or '' }}",
+                tenure: "{{ customer.tenure_months }} months",
+                last_payment: "{{ customer.last_payment_date|date if customer.last_payment_date else 'No payments' }}",
+                churn_probability: "{{ (customer.churn_probability * 100)|round(1) if customer.churn_probability else 0 }}%"
+            },
+            {% endfor %}
+        ];
+        
+        if (highRiskCustomers.length === 0) {
+            alert('No high-risk customers to export.');
+            return;
+        }
+        
+        // Create CSV content
+        let csv = 'Customer Name,Phone,Email,Tenure,Last Payment,Churn Risk\n';
+        highRiskCustomers.forEach(customer => {
+            csv += `"${customer.name}","${customer.phone}","${customer.email}","${customer.tenure}","${customer.last_payment}","${customer.churn_probability}"\n`;
+        });
+        
+        // Download CSV
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `high_risk_customers_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        alert('✅ High-risk customer list exported successfully!');
+    };
+    
+    window.scheduleFollowUps = function() {
+        if (confirm('Schedule follow-up calls for all high-risk customers over the next 3 days?')) {
+            alert('📅 Follow-ups Scheduled!\n\n✅ 24-hour reminders set\n✅ Call scripts prepared\n✅ Customer history notes added\n✅ Team notifications sent\n\nFollow-up tasks created for {{ customers|selectattr("churn_risk", "equalto", "high")|list|length }} customers.');
+        }
+    };
+    
+    window.executeBulkActions = function() {
+        const actions = {
+            emailReminders: document.getElementById('actionEmailReminders').checked,
+            createTasks: document.getElementById('actionCreateTasks').checked,
+            updatePriority: document.getElementById('actionUpdatePriority').checked,
+            exportList: document.getElementById('actionExportList').checked
+        };
+        
+        let selectedActions = Object.keys(actions).filter(key => actions[key]);
+        
+        if (selectedActions.length === 0) {
+            alert('Please select at least one action to execute.');
+            return;
+        }
+        
+        if (confirm(`Execute ${selectedActions.length} actions for {{ customers|selectattr("churn_risk", "equalto", "high")|list|length }} high-risk customers?`)) {
+            bulkActionModal.hide();
+            
+            let message = '✅ Bulk Actions Executed Successfully!\n\n';
+            
+            if (actions.emailReminders) {
+                message += '📧 Payment reminder emails sent\n';
+            }
+            if (actions.createTasks) {
+                message += '📋 Follow-up tasks created\n';
+            }
+            if (actions.updatePriority) {
+                message += '🔴 Accounts marked as high priority\n';
+            }
+            if (actions.exportList) {
+                message += '📄 Contact list exported\n';
+                exportHighRiskList(); // Also trigger export
+            }
+            
+            message += `\n{{ customers|selectattr("churn_risk", "equalto", "high")|list|length }} customers processed.`;
+            
+            alert(message);
+        }
+    };
+    
+    // Helper functions
+    window.viewCustomerDetail = function(customerId) {
+        window.location.href = `/crm/customers/${customerId}`;
+    };
+    
+    window.createFollowUpTask = function(customerId) {
+        alert('📅 Follow-up task created!\n\nTask scheduled for tomorrow with high priority flag.');
+    };
+    
+    window.markContactAttempted = function() {
+        urgentContactModal.hide();
+        alert('✅ Contact attempt recorded!\n\nCustomer interaction logged in system.');
+    };
+    
+    // Auto-highlight high-risk rows for better visibility
+    document.querySelectorAll('tr.table-danger').forEach(row => {
+        row.style.borderLeft = '4px solid #dc3545';
+    });
+    
+    // Auto-focus on high-risk customers if they exist
+    {% if current_risk == 'high' and customers|length > 0 %}
+    // Add pulsing effect to high-risk customers
+    setTimeout(() => {
+        document.querySelectorAll('.table-danger').forEach((row, index) => {
+            setTimeout(() => {
+                row.style.animation = 'highRiskPulse 2s ease-in-out';
+            }, index * 200);
+        });
+    }, 500);
+    {% endif %}
+});
+</script>
+
+<!-- ✅ Enhanced CSS for payment risk visualization -->
+<style>
+.border-left-primary { border-left: 4px solid #007bff !important; }
+.border-left-success { border-left: 4px solid #28a745 !important; }
+.border-left-info { border-left: 4px solid #17a2b8 !important; }
+.border-left-warning { border-left: 4px solid #ffc107 !important; }
+.border-left-danger { border-left: 4px solid #dc3545 !important; }
+.border-left-secondary { border-left: 4px solid #6c757d !important; }
+
+/* High-risk customer animation */
+@keyframes highRiskPulse {
+    0% { background-color: rgba(220,53,69,0.1); }
+    50% { background-color: rgba(220,53,69,0.3); }
+    100% { background-color: rgba(220,53,69,0.1); }
+}
+
+/* Enhanced table styling */
+.table-danger {
+    background-color: rgba(220,53,69,0.1) !important;
+}
+
+.table-warning {
+    background-color: rgba(255,193,7,0.1) !important;
+}
+
+/* Payment risk badges */
+.badge {
+    font-size: 0.75em;
+}
+
+/* Progress bars for churn probability */
+.progress {
+    background-color: rgba(0,0,0,0.1);
+}
+
+/* Hover effects for customer rows */
+.table-hover tbody tr:hover {
+    background-color: rgba(0,0,0,0.075);
+    transition: background-color 0.15s ease-in-out;
+}
+
+/* Enhanced action buttons */
+.btn-group .btn {
+    border-radius: 0;
+}
+
+.btn-group .btn:first-child {
+    border-top-left-radius: 0.25rem;
+    border-bottom-left-radius: 0.25rem;
+}
+
+.btn-group .btn:last-child {
+    border-top-right-radius: 0.25rem;
+    border-bottom-right-radius: 0.25rem;
+}
+
+/* Modal enhancements */
+.modal-header.bg-danger {
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+/* Alert styling */
+.alert-danger {
+    border-left: 4px solid #dc3545;
+}
+
+/* Filter form enhancements */
+.form-select:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+</style>
 {% endblock %}

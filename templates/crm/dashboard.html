@@ -1,14 +1,17 @@
 {% extends 'base.html' %}
 
-{% block title %}Enhanced CRM Dashboard - {{ company.name }}{% endblock %}
+{% block title %}Enhanced CRM Dashboard with Predictions - {{ company.name }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
         <h1 class="h2">
-            <i class="fas fa-sync-alt me-2"></i>Enhanced CRM Dashboard
+            <i class="fas fa-brain me-2"></i>Enhanced CRM Dashboard with Payment-Based Predictions
+            {% if connection_info.prediction_enabled %}
+            <span class="badge bg-success ms-2">Predictions Active</span>
+            {% endif %}
             {% if connection_info.postgresql_configured %}
-            <span class="badge bg-success ms-2">PostgreSQL</span>
+            <span class="badge bg-primary ms-2">PostgreSQL</span>
             {% elif connection_info.api_configured %}
             <span class="badge bg-warning ms-2">API Fallback</span>
             {% else %}
@@ -17,26 +20,31 @@
         </h1>
         <div class="btn-toolbar mb-2 mb-md-0">
             {% if current_user.is_manager() %}
-            <!-- ✅ ENHANCED: PostgreSQL-aware Sync Button -->
+            <!-- ✅ ENHANCED: PostgreSQL + Predictions aware sync button -->
             <button type="button" class="btn btn-primary me-2" id="syncButton" 
                     data-bs-toggle="modal" data-bs-target="#syncModal">
                 <i class="fas fa-sync-alt me-2"></i>
                 {% if connection_info.postgresql_configured %}
-                    Fast Sync (PostgreSQL)
+                    Fast Sync + Predictions
                 {% else %}
                     Sync CRM Data
                 {% endif %}
             </button>
             
-            {% if connection_info.postgresql_configured and not connection_info.api_configured %}
-            <button type="button" class="btn btn-info me-2" onclick="showConnectionInfo()">
-                <i class="fas fa-database me-2"></i>Connection Info
+            <!-- ✅ NEW: Prediction-specific actions -->
+            <button type="button" class="btn btn-success me-2" onclick="viewPredictionSummary()">
+                <i class="fas fa-chart-line me-2"></i>Prediction Analytics
+            </button>
+            
+            {% if stats.customers_with_predictions > 0 %}
+            <button type="button" class="btn btn-warning me-2" onclick="regeneratePredictions()">
+                <i class="fas fa-redo me-2"></i>Update Predictions
             </button>
             {% endif %}
             
-            {% if company.sync_status == 'in_progress' %}
-            <button type="button" class="btn btn-warning me-2" id="resetSyncButton">
-                <i class="fas fa-redo me-2"></i>Reset Sync
+            {% if connection_info.postgresql_configured %}
+            <button type="button" class="btn btn-info me-2" onclick="showConnectionInfo()">
+                <i class="fas fa-database me-2"></i>Performance Info
             </button>
             {% endif %}
             {% endif %}
@@ -47,70 +55,26 @@
         </div>
     </div>
 
-    <!-- ✅ ENHANCED: Success Alert (Hidden by default, shown by JavaScript) -->
-    <div id="successAlert" class="alert alert-success alert-dismissible fade" role="alert" style="display: none;">
-        <div class="d-flex align-items-center">
-            <i class="fas fa-check-circle fa-2x me-3 text-success"></i>
-            <div id="successContent">
-                <strong>Sync Completed Successfully!</strong>
-                <div id="successDetails"></div>
-            </div>
-        </div>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-
-    <!-- ✅ ENHANCED: Connection Status Alert -->
-    {% if connection_info.postgresql_configured %}
+    <!-- ✅ NEW: Payment-Based Prediction Alert -->
+    {% if connection_info.prediction_enabled and connection_info.postgresql_configured %}
     <div class="alert alert-success alert-dismissible fade show" role="alert">
         <div class="d-flex align-items-center">
-            <i class="fas fa-database fa-2x me-3"></i>
+            <i class="fas fa-brain fa-2x me-3"></i>
             <div>
-                <h5 class="alert-heading mb-1">🚀 PostgreSQL Direct Connection Active!</h5>
-                <p class="mb-0">Your CRM sync is now <strong>10-50x faster</strong> with direct database access. Latest sync: <strong>618 records/sec</strong>!</p>
-            </div>
-        </div>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-    {% elif connection_info.api_configured %}
-    <div class="alert alert-warning alert-dismissible fade show" role="alert">
-        <div class="d-flex align-items-center">
-            <i class="fas fa-wifi fa-2x me-3"></i>
-            <div>
-                <h5 class="alert-heading mb-1">⚡ API Connection Active</h5>
-                <p class="mb-0">Using API sync. <a href="#" onclick="showPostgreSQLSetup()" class="alert-link">Configure PostgreSQL</a> for much faster performance!</p>
-            </div>
-        </div>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-    {% else %}
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <div class="d-flex align-items-center">
-            <i class="fas fa-exclamation-triangle fa-2x me-3"></i>
-            <div>
-                <h5 class="alert-heading mb-1">⚠️ No Sync Method Configured</h5>
-                <p class="mb-0">Please configure PostgreSQL or API connection in Company Settings to enable data synchronization.</p>
+                <h5 class="alert-heading mb-1">🧠 Payment-Based Churn Prediction Active!</h5>
+                <p class="mb-0">Your system now uses <strong>payment behavior analysis</strong> from the n.py logic for accurate churn prediction. Real-time risk assessment with multi-table mapping!</p>
+                <small class="text-success">
+                    <strong>Features:</strong> 90-day payment rules • Real-time risk scoring • Multi-table analysis (customers, payments, tickets, usage)
+                </small>
             </div>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
     {% endif %}
 
-    <!-- Sync Status Alert -->
-    <div id="syncAlert" class="alert alert-info alert-dismissible fade" role="alert" style="display: none;">
-        <div class="d-flex align-items-center">
-            <div class="spinner-border spinner-border-sm me-3" role="status">
-                <span class="visually-hidden">Syncing...</span>
-            </div>
-            <div>
-                <strong>Enhanced sync in progress...</strong>
-                <p class="mb-0 small" id="syncMessage">Please wait while we sync your data via {{ connection_info.preferred_method }}.</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- ✅ ENHANCED: Statistics Cards with Real Performance Data -->
+    <!-- ✅ ENHANCED: Statistics Cards with Prediction Analytics -->
     <div class="row mb-4">
-        <div class="col-xl-3 col-md-6 mb-4">
+        <div class="col-xl-2 col-md-4 mb-4">
             <div class="card border-left-primary shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
@@ -121,8 +85,10 @@
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
                                 {{ "{:,}".format(stats.customers if stats.customers else 0) }}
                             </div>
-                            {% if connection_info.postgresql_configured %}
-                            <small class="text-success">⚡ Fast Access (67K+ synced)</small>
+                            {% if stats.customers_with_predictions > 0 %}
+                            <small class="text-success">
+                                {{ "{:,}".format(stats.customers_with_predictions) }} with predictions
+                            </small>
                             {% endif %}
                         </div>
                         <div class="col-auto">
@@ -133,7 +99,51 @@
             </div>
         </div>
 
-        <div class="col-xl-3 col-md-6 mb-4">
+        <!-- ✅ NEW: High Risk Customers Card -->
+        <div class="col-xl-2 col-md-4 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                High Risk
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ "{:,}".format(stats.high_risk_customers if stats.high_risk_customers else 0) }}
+                            </div>
+                            <small class="text-danger">90+ days no payment</small>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ✅ NEW: Medium Risk Customers Card -->
+        <div class="col-xl-2 col-md-4 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Medium Risk
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ "{:,}".format(stats.medium_risk_customers if stats.medium_risk_customers else 0) }}
+                            </div>
+                            <small class="text-warning">60+ days no payment</small>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-md-4 mb-4">
             <div class="card border-left-success shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
@@ -144,6 +154,7 @@
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
                                 {{ "{:,}".format(stats.active_customers if stats.active_customers else 0) }}
                             </div>
+                            <small class="text-success">{{ "{:,}".format(stats.low_risk_customers) }} low risk</small>
                         </div>
                         <div class="col-auto">
                             <i class="fas fa-user-check fa-2x text-gray-300"></i>
@@ -153,7 +164,7 @@
             </div>
         </div>
 
-        <div class="col-xl-3 col-md-6 mb-4">
+        <div class="col-xl-2 col-md-4 mb-4">
             <div class="card border-left-info shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
@@ -174,16 +185,16 @@
             </div>
         </div>
 
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning shadow h-100 py-2">
+        <div class="col-xl-2 col-md-4 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
                                 Total Revenue
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{company.currency}} {{ "{:,.0f}".format(stats.total_revenue if stats.total_revenue else 0) }}
+                                TZS {{ "{:,.0f}".format(stats.total_revenue if stats.total_revenue else 0) }}
                             </div>
                             <small class="text-muted">{{ "{:,}".format(stats.payments if stats.payments else 0) }} payments</small>
                         </div>
@@ -196,143 +207,109 @@
         </div>
     </div>
 
-    <!-- ✅ ENHANCED: Sync Status Card with Real Performance Metrics -->
+    <!-- ✅ NEW: Prediction Analytics Summary -->
+    {% if stats.customers_with_predictions > 0 %}
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card shadow">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-info-circle me-2"></i>Enhanced CRM Sync Status
+            <div class="card shadow border-left-success">
+                <div class="card-header py-3 bg-light">
+                    <h6 class="m-0 font-weight-bold text-success">
+                        <i class="fas fa-chart-pie me-2"></i>Payment-Based Prediction Analytics
                     </h6>
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-4">
-                            <dl class="mb-0">
-                                <dt>Connection Method:</dt>
-                                <dd>
-                                    {% if connection_info.postgresql_configured %}
-                                        <span class="badge bg-success">
-                                            <i class="fas fa-database me-1"></i>PostgreSQL Direct
-                                        </span>
-                                        <small class="text-success d-block">⚡ 618 records/sec achieved!</small>
-                                    {% elif connection_info.api_configured %}
-                                        <span class="badge bg-warning">
-                                            <i class="fas fa-wifi me-1"></i>API Fallback
-                                        </span>
-                                        <small class="text-warning d-block">Standard performance</small>
-                                    {% else %}
-                                        <span class="badge bg-danger">
-                                            <i class="fas fa-times me-1"></i>Not Configured
-                                        </span>
-                                    {% endif %}
-                                </dd>
-                                
-                                <dt class="mt-2">Last Sync:</dt>
-                                <dd>{{ stats.last_sync|datetime if stats.last_sync else 'Never' }}</dd>
-                                
-                                <dt>Status:</dt>
-                                <dd>
-                                    <span class="badge bg-{{ 'success' if stats.sync_status == 'completed' else 'warning' if stats.sync_status == 'in_progress' else 'secondary' }}">
-                                        {{ stats.sync_status|upper }}
-                                    </span>
-                                </dd>
-                            </dl>
-                        </div>
-                        <div class="col-md-4">
-                            <dl class="mb-0">
-                                <dt>Total Syncs:</dt>
-                                <dd>{{ company.total_syncs or 0 }}</dd>
-                                
-                                <dt>Last Performance:</dt>
-                                <dd>
-                                    {% if connection_info.postgresql_configured %}
-                                        <small class="text-success">
-                                            <i class="fas fa-rocket me-1"></i>67,382 records in 108s<br>
-                                            <i class="fas fa-tachometer-alt me-1"></i>618 records/sec
-                                        </small>
-                                    {% else %}
-                                        <small class="text-muted">No recent sync data</small>
-                                    {% endif %}
-                                </dd>
-                                
-                                <dt>Configuration:</dt>
-                                <dd>
-                                    {% if connection_info.postgresql_configured %}
-                                        <small class="text-success">
-                                            <i class="fas fa-check me-1"></i>PostgreSQL: Connected<br>
-                                        </small>
-                                    {% endif %}
-                                    {% if connection_info.api_configured %}
-                                        <small class="text-info">
-                                            <i class="fas fa-check me-1"></i>API: Available
-                                        </small>
-                                    {% endif %}
-                                    {% if not connection_info.postgresql_configured and not connection_info.api_configured %}
-                                        <small class="text-danger">
-                                            <i class="fas fa-times me-1"></i>No methods configured
-                                        </small>
-                                    {% endif %}
-                                </dd>
-                            </dl>
-                        </div>
-                        <div class="col-md-4">
-                            {% if company.sync_error %}
-                            <div class="alert alert-danger mb-0">
-                                <small><strong>Last Error:</strong><br>{{ company.sync_error }}</small>
-                            </div>
+                        <div class="col-md-3 text-center">
+                            <div class="text-muted small">Average Churn Risk</div>
+                            <div class="h4 mb-2">{{ (stats.avg_churn_probability * 100)|round(1) }}%</div>
+                            {% if stats.avg_churn_probability < 0.3 %}
+                            <span class="badge bg-success">Healthy Portfolio</span>
+                            {% elif stats.avg_churn_probability < 0.6 %}
+                            <span class="badge bg-warning">Monitor Closely</span>
                             {% else %}
-                            <div class="text-success mb-3">
-                                <i class="fas fa-check-circle me-2"></i>No sync errors
-                            </div>
-                            
-                            {% if connection_info.postgresql_configured %}
-                            <div class="card bg-light border-success">
-                                <div class="card-body p-2">
-                                    <h6 class="card-title mb-1 text-success">
-                                        <i class="fas fa-rocket me-1"></i>Performance Achievement
-                                    </h6>
-                                    <ul class="list-unstyled mb-0 small">
-                                        <li>✅ 67K+ customers synced</li>
-                                        <li>✅ 618 records/sec speed</li>
-                                        <li>✅ 108s total duration</li>
-                                        <li>✅ Zero errors</li>
-                                    </ul>
-                                </div>
-                            </div>
-                            {% elif connection_info.api_configured %}
-                            <div class="card bg-light">
-                                <div class="card-body p-2">
-                                    <h6 class="card-title mb-1">
-                                        <i class="fas fa-info-circle me-1"></i>Upgrade Available
-                                    </h6>
-                                    <p class="mb-2 small">Configure PostgreSQL for:</p>
-                                    <ul class="list-unstyled mb-1 small">
-                                        <li>• Much faster sync speeds</li>
-                                        <li>• Better performance</li>
-                                        <li>• Enhanced reliability</li>
-                                    </ul>
-                                    <button class="btn btn-sm btn-success" onclick="showPostgreSQLSetup()">
-                                        Setup PostgreSQL
-                                    </button>
-                                </div>
-                            </div>
+                            <span class="badge bg-danger">High Risk Portfolio</span>
                             {% endif %}
-                            {% endif %}
+                        </div>
+                        <div class="col-md-3 text-center">
+                            <div class="text-muted small">Coverage</div>
+                            <div class="h4 mb-2">
+                                {{ ((stats.customers_with_predictions / stats.customers * 100) if stats.customers > 0 else 0)|round(1) }}%
+                            </div>
+                            <span class="badge bg-info">{{ stats.customers_with_predictions }}/{{ stats.customers }} customers</span>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="text-muted small mb-2">Risk Distribution</div>
+                            <div class="progress mb-2" style="height: 25px;">
+                                {% set total_predicted = stats.high_risk_customers + stats.medium_risk_customers + stats.low_risk_customers %}
+                                {% if total_predicted > 0 %}
+                                <div class="progress-bar bg-danger" style="width: {{ (stats.high_risk_customers / total_predicted * 100) }}%">
+                                    High {{ (stats.high_risk_customers / total_predicted * 100)|round }}%
+                                </div>
+                                <div class="progress-bar bg-warning" style="width: {{ (stats.medium_risk_customers / total_predicted * 100) }}%">
+                                    Medium {{ (stats.medium_risk_customers / total_predicted * 100)|round }}%
+                                </div>
+                                <div class="progress-bar bg-success" style="width: {{ (stats.low_risk_customers / total_predicted * 100) }}%">
+                                    Low {{ (stats.low_risk_customers / total_predicted * 100)|round }}%
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="small text-center">
+                                🔴 {{ stats.high_risk_customers }} High Risk | 
+                                🟡 {{ stats.medium_risk_customers }} Medium Risk | 
+                                🟢 {{ stats.low_risk_customers }} Low Risk
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    {% endif %}
 
-    <!-- Recent Customers (with better error handling) -->
+    <!-- ✅ NEW: High Risk Customers Alert Panel -->
+    {% if stats.high_risk_customers > 0 %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow border-left-danger">
+                <div class="card-header py-3 bg-danger text-white">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-exclamation-triangle me-2"></i>🚨 HIGH RISK CUSTOMERS ALERT ({{ stats.high_risk_customers }} customers)
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger mb-3">
+                        <strong>Immediate Action Required!</strong> These customers haven't made payments in 90+ days according to n.py payment analysis logic.
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Recommended Actions:</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-phone text-danger me-2"></i>Contact customers immediately</li>
+                                <li><i class="fas fa-dollar-sign text-warning me-2"></i>Offer payment plans or incentives</li>
+                                <li><i class="fas fa-handshake text-info me-2"></i>Review service quality issues</li>
+                                <li><i class="fas fa-chart-line text-success me-2"></i>Track intervention results</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6 text-center">
+                            <button class="btn btn-danger btn-lg" onclick="viewHighRiskCustomers()">
+                                <i class="fas fa-users me-2"></i>View High Risk Customers
+                            </button>
+                            <br><small class="text-muted mt-2 d-block">View detailed list with contact information</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- ✅ ENHANCED: Recent Customers with Payment Risk Indicators -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card shadow">
                 <div class="card-header py-3 d-flex justify-content-between align-items-center">
                     <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-users me-2"></i>Recent Customers
+                        <i class="fas fa-users me-2"></i>Recent Customers with Payment Risk Analysis
                     </h6>
                     <a href="{{ url_for('crm.customers') }}" class="btn btn-sm btn-primary">
                         View All <i class="fas fa-arrow-right ms-1"></i>
@@ -349,6 +326,8 @@
                                     <th>Status</th>
                                     <th>Tenure</th>
                                     <th>Monthly Charges</th>
+                                    <th>Payment Risk</th>
+                                    <th>Churn Risk</th>
                                     <th>Added</th>
                                 </tr>
                             </thead>
@@ -356,14 +335,38 @@
                                 {% for customer in recent_customers %}
                                 <tr>
                                     <td><strong>{{ customer.customer_name or 'N/A' }}</strong></td>
-                                    <td>{{ customer.phone or customer.mobile or 'N/A' }}</td>
+                                    <td>{{ customer.phone or 'N/A' }}</td>
                                     <td>
                                         <span class="badge bg-{{ 'success' if customer.status == 'active' else 'secondary' }}">
                                             {{ customer.status|upper if customer.status else 'UNKNOWN' }}
                                         </span>
                                     </td>
                                     <td>{{ customer.tenure_months or 0 }} months</td>
-                                    <td>{{company.currency}} {{ "{:,.0f}".format(customer.monthly_charges or 0) }}</td>
+                                    <td>TZS {{ "{:,.0f}".format(customer.monthly_charges or 0) }}</td>
+                                    <td>
+                                        <!-- ✅ NEW: Payment risk indicator from n.py logic -->
+                                        {% if customer.payment_status == 'high_risk' %}
+                                            <span class="badge bg-danger">90+ Days</span>
+                                        {% elif customer.payment_status == 'medium_risk' %}
+                                            <span class="badge bg-warning">60+ Days</span>
+                                        {% elif customer.payment_status == 'good' %}
+                                            <span class="badge bg-success">Recent</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">No Data</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if customer.churn_risk %}
+                                        <span class="badge bg-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }}">
+                                            {{ customer.churn_risk|upper }}
+                                        </span>
+                                        {% if customer.churn_probability %}
+                                        <small class="text-muted d-block">{{ (customer.churn_probability * 100)|round(1) }}%</small>
+                                        {% endif %}
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
                                     <td>{{ customer.created_at|datetime if customer.created_at else 'N/A' }}</td>
                                 </tr>
                                 {% endfor %}
@@ -373,7 +376,7 @@
                     {% else %}
                     <div class="alert alert-info mb-0">
                         <i class="fas fa-info-circle me-2"></i>
-                        No customers found. Click "{{ 'Fast Sync (PostgreSQL)' if connection_info.postgresql_configured else 'Sync CRM Data' }}" to import customers.
+                        No customers found. Click "{{ 'Fast Sync + Predictions' if connection_info.postgresql_configured else 'Sync CRM Data' }}" to import customers and generate predictions.
                     </div>
                     {% endif %}
                 </div>
@@ -381,22 +384,29 @@
         </div>
     </div>
 
-    <!-- Quick Actions -->
+    <!-- Quick Actions with Enhanced Features -->
     <div class="row">
-        <div class="col-md-4 mb-3">
+        <div class="col-md-3 mb-3">
             <div class="card shadow h-100">
                 <div class="card-body text-center">
                     <i class="fas fa-users fa-3x text-primary mb-3"></i>
                     <h5>Customers</h5>
-                    <p class="text-muted small">View and manage all {{ "{:,}".format(stats.customers if stats.customers else 0) }} customers</p>
+                    <p class="text-muted small">Manage {{ "{:,}".format(stats.customers if stats.customers else 0) }} customers with payment risk analysis</p>
                     <a href="{{ url_for('crm.customers') }}" class="btn btn-primary btn-sm">
                         View Customers <i class="fas fa-arrow-right ms-1"></i>
                     </a>
+                    {% if stats.high_risk_customers > 0 %}
+                    <div class="mt-2">
+                        <a href="{{ url_for('crm.customers', risk='high') }}" class="btn btn-danger btn-sm">
+                            {{ stats.high_risk_customers }} High Risk <i class="fas fa-exclamation-triangle ms-1"></i>
+                        </a>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
 
-        <div class="col-md-4 mb-3">
+        <div class="col-md-3 mb-3">
             <div class="card shadow h-100">
                 <div class="card-body text-center">
                     <i class="fas fa-ticket-alt fa-3x text-info mb-3"></i>
@@ -409,7 +419,7 @@
             </div>
         </div>
 
-        <div class="col-md-4 mb-3">
+        <div class="col-md-3 mb-3">
             <div class="card shadow h-100">
                 <div class="card-body text-center">
                     <i class="fas fa-money-bill-wave fa-3x text-success mb-3"></i>
@@ -421,21 +431,31 @@
                 </div>
             </div>
         </div>
+
+        <!-- ✅ NEW: Prediction Analytics Quick Action -->
+        <div class="col-md-3 mb-3">
+            <div class="card shadow h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-brain fa-3x text-warning mb-3"></i>
+                    <h5>Predictions</h5>
+                    <p class="text-muted small">{{ "{:,}".format(stats.customers_with_predictions if stats.customers_with_predictions else 0) }} payment-based predictions</p>
+                    <button class="btn btn-warning btn-sm" onclick="viewPredictionSummary()">
+                        View Analytics <i class="fas fa-chart-line ms-1"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
-<!-- ✅ ENHANCED: Selective Sync Modal with Performance Info -->
+<!-- ✅ ENHANCED: Selective Sync Modal with Prediction Options -->
 <div class="modal fade" id="syncModal" tabindex="-1" aria-labelledby="syncModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="syncModalLabel">
                     <i class="fas fa-sync-alt me-2"></i>
-                    {% if connection_info.postgresql_configured %}
-                        Enhanced Fast Sync (PostgreSQL)
-                    {% else %}
-                        Selective CRM Sync
-                    {% endif %}
+                    Enhanced Sync with Payment-Based Predictions
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -443,26 +463,26 @@
                 {% if connection_info.postgresql_configured %}
                 <div class="alert alert-success">
                     <i class="fas fa-rocket me-2"></i>
-                    <strong>PostgreSQL Direct Connection Active!</strong><br>
-                    Your sync will be <strong>10-50x faster</strong> than API methods. Previous sync: <strong>618 records/sec</strong>!
+                    <strong>PostgreSQL + Predictions Active!</strong><br>
+                    Your sync will include <strong>payment behavior analysis</strong> and generate churn predictions using n.py logic!
                 </div>
                 {% endif %}
                 
-                <p class="text-muted">Choose which data types to sync from your CRM:</p>
+                <p class="text-muted">Choose data types and prediction options:</p>
                 
                 <div class="form-check mb-3">
                     <input class="form-check-input" type="checkbox" id="syncCustomers" checked>
                     <label class="form-check-label" for="syncCustomers">
-                        <strong><i class="fas fa-users me-2 text-primary"></i>Customers</strong>
-                        <br><small class="text-muted">Sync customer information and profiles (67K+ records)</small>
+                        <strong><i class="fas fa-users me-2 text-primary"></i>Enhanced Customers</strong>
+                        <br><small class="text-muted">Sync customer information with payment history analysis</small>
                     </label>
                 </div>
                 
                 <div class="form-check mb-3">
                     <input class="form-check-input" type="checkbox" id="syncPayments" checked>
                     <label class="form-check-label" for="syncPayments">
-                        <strong><i class="fas fa-money-bill-wave me-2 text-success"></i>Payments</strong>
-                        <br><small class="text-muted">Sync payment transactions and revenue data</small>
+                        <strong><i class="fas fa-money-bill-wave me-2 text-success"></i>Payment Transactions</strong>
+                        <br><small class="text-muted">Sync payment data for churn prediction analysis</small>
                     </label>
                 </div>
                 
@@ -470,26 +490,37 @@
                     <input class="form-check-input" type="checkbox" id="syncTickets" checked>
                     <label class="form-check-label" for="syncTickets">
                         <strong><i class="fas fa-ticket-alt me-2 text-info"></i>Support Tickets</strong>
-                        <br><small class="text-muted">Sync customer support tickets and issues</small>
+                        <br><small class="text-muted">Sync support tickets (affects prediction accuracy)</small>
                     </label>
                 </div>
                 
                 <div class="form-check mb-3">
-                    <input class="form-check-input" type="checkbox" id="syncUsage">
+                    <input class="form-check-input" type="checkbox" id="syncUsage" checked>
                     <label class="form-check-label" for="syncUsage">
                         <strong><i class="fas fa-chart-line me-2 text-warning"></i>Usage Statistics</strong>
-                        <br><small class="text-muted">Sync customer usage data and patterns</small>
+                        <br><small class="text-muted">Sync customer usage data for comprehensive analysis</small>
+                    </label>
+                </div>
+                
+                <hr>
+                
+                <!-- ✅ NEW: Prediction Options -->
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="generatePredictions" checked>
+                    <label class="form-check-label" for="generatePredictions">
+                        <strong><i class="fas fa-brain me-2 text-danger"></i>Generate Payment-Based Predictions</strong>
+                        <br><small class="text-muted">Apply n.py logic: 90-day payment rules, risk assessment, business recommendations</small>
                     </label>
                 </div>
                 
                 <div class="alert alert-info mt-3">
                     <i class="fas fa-info-circle me-2"></i>
                     <small>
-                        <strong>Smart Sync:</strong> 
+                        <strong>Enhanced Features:</strong> 
                         {% if connection_info.postgresql_configured %}
-                            Direct database access enables faster processing and larger batch sizes (500+ records/batch).
+                            Multi-table mapping (customers → payments → tickets → usage) with real-time payment behavior analysis.
                         {% else %}
-                            Only new or changed data will be synced to save time.
+                            Basic sync with prediction generation. Configure PostgreSQL for multi-table mapping.
                         {% endif %}
                     </small>
                 </div>
@@ -499,7 +530,7 @@
                 <button type="button" class="btn btn-primary" id="startSyncButton">
                     <i class="fas fa-sync-alt me-2"></i>
                     {% if connection_info.postgresql_configured %}
-                        Start Fast Sync
+                        Start Enhanced Sync
                     {% else %}
                         Start Sync
                     {% endif %}
@@ -509,42 +540,31 @@
     </div>
 </div>
 
-<!-- PostgreSQL Setup Modal (unchanged) -->
-<div class="modal fade" id="postgresSetupModal" tabindex="-1" aria-labelledby="postgresSetupModalLabel" aria-hidden="true">
+<!-- ✅ NEW: Prediction Summary Modal -->
+<div class="modal fade" id="predictionModal" tabindex="-1" aria-labelledby="predictionModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="postgresSetupModalLabel">
-                    <i class="fas fa-database me-2"></i>Setup PostgreSQL Direct Connection
+                <h5 class="modal-title" id="predictionModalLabel">
+                    <i class="fas fa-chart-line me-2"></i>Payment-Based Prediction Analytics
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-success">
-                    <h6><i class="fas fa-rocket me-2"></i>Benefits of PostgreSQL Direct Connection:</h6>
-                    <ul class="mb-0">
-                        <li><strong>10-50x faster</strong> sync performance</li>
-                        <li><strong>Better reliability</strong> and error handling</li>
-                        <li><strong>Larger batch processing</strong> capabilities</li>
-                        <li><strong>Real-time data access</strong></li>
-                    </ul>
+                <div id="predictionContent">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading predictions...</span>
+                        </div>
+                        <p class="mt-2">Loading prediction analytics...</p>
+                    </div>
                 </div>
-                
-                <p>To setup PostgreSQL connection, you'll need:</p>
-                <ul>
-                    <li>PostgreSQL server host and port</li>
-                    <li>Database name</li>
-                    <li>Username and password</li>
-                    <li>Network access to the database server</li>
-                </ul>
-                
-                <p class="text-muted">Please contact your system administrator or configure this in Company Settings.</p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <a href="{{ url_for('company.settings') }}" class="btn btn-primary">
-                    <i class="fas fa-cog me-2"></i>Go to Settings
-                </a>
+                <button type="button" class="btn btn-warning" onclick="regeneratePredictions()">
+                    <i class="fas fa-redo me-2"></i>Update Predictions
+                </button>
             </div>
         </div>
     </div>
@@ -555,71 +575,39 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const syncModal = new bootstrap.Modal(document.getElementById('syncModal'));
-    const postgresSetupModal = new bootstrap.Modal(document.getElementById('postgresSetupModal'));
+    const predictionModal = new bootstrap.Modal(document.getElementById('predictionModal'));
     const startSyncButton = document.getElementById('startSyncButton');
-    const syncAlert = document.getElementById('syncAlert');
-    const syncMessage = document.getElementById('syncMessage');
-    const successAlert = document.getElementById('successAlert');
-    const resetSyncButton = document.getElementById('resetSyncButton');
     
-    // Show PostgreSQL setup modal
-    window.showPostgreSQLSetup = function() {
-        postgresSetupModal.show();
-    };
-    
-    // Show connection info with real performance data
-    window.showConnectionInfo = function() {
-        const message = `PostgreSQL Connection Active
-
-✅ Direct database access
-⚡ 618 records/sec achieved
-🔒 Secure connection  
-📊 67,382 customers synced
-🚀 108s sync duration
-💾 Real-time data access
-
-Your CRM integration is performing excellently!`;
-        alert(message);
-    };
-    
-    // ✅ FIXED: Start selective sync with proper performance display
+    // ✅ ENHANCED: Start selective sync with prediction generation
     if (startSyncButton) {
         startSyncButton.addEventListener('click', function() {
-            // Get selected sync options
+            // Get enhanced sync options including predictions
             const syncOptions = {
                 sync_customers: document.getElementById('syncCustomers').checked,
                 sync_payments: document.getElementById('syncPayments').checked,
                 sync_tickets: document.getElementById('syncTickets').checked,
-                sync_usage: document.getElementById('syncUsage').checked
+                sync_usage: document.getElementById('syncUsage').checked,
+                generate_predictions: document.getElementById('generatePredictions').checked  // ✅ NEW
             };
             
             // Check if at least one option is selected
             if (!Object.values(syncOptions).some(v => v)) {
-                alert('Please select at least one data type to sync.');
+                alert('Please select at least one option to sync.');
                 return;
             }
             
-            // Close modal
+            // Close modal and show progress
             syncModal.hide();
-            
-            // Show sync progress alert
-            syncAlert.style.display = 'block';
-            syncAlert.classList.add('show');
-            
-            {% if connection_info.postgresql_configured %}
-            syncMessage.textContent = 'Enhanced sync starting via PostgreSQL (expecting 500+ records/sec)...';
-            {% else %}
-            syncMessage.textContent = 'Enhanced sync starting via API...';
-            {% endif %}
+            showSyncProgress();
             
             // Disable button
             startSyncButton.disabled = true;
-            startSyncButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Syncing...';
+            startSyncButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Enhanced Syncing...';
             
-            // Record start time for performance measurement
+            // Record start time
             const startTime = Date.now();
             
-            // Make AJAX request
+            // Make enhanced AJAX request
             fetch('{{ url_for("crm.sync") }}', {
                 method: 'POST',
                 headers: {
@@ -629,68 +617,51 @@ Your CRM integration is performing excellently!`;
             })
             .then(response => response.json())
             .then(data => {
-                // Calculate elapsed time
                 const elapsedTime = (Date.now() - startTime) / 1000;
-                
-                // Hide sync alert
-                syncAlert.classList.remove('show');
-                setTimeout(() => { syncAlert.style.display = 'none'; }, 300);
+                hideSyncProgress();
                 
                 if (data.success) {
-                    // Show enhanced success message with performance info
-                    const successContent = document.getElementById('successContent');
-                    const successDetails = document.getElementById('successDetails');
+                    let successMessage = `🎉 Enhanced Sync Completed!\n\n${data.message}`;
                     
-                    let performanceHtml = data.message;
-                    
-                    if (data.performance) {
-                        performanceHtml += `<br><div class="mt-2">
-                            <strong>📊 Performance Metrics:</strong><br>
-                            <small class="text-success">
-                                ⚡ <strong>${data.performance.records_per_second} records/sec</strong> |
-                                🕐 ${data.performance.sync_duration}s duration |
-                                📈 ${data.performance.total_records_processed.toLocaleString()} records |
-                                🔧 ${data.performance.connection_method.toUpperCase()} method
-                            </small>
-                        </div>`;
+                    // Add prediction summary if available
+                    if (data.prediction_summary) {
+                        const pred = data.prediction_summary;
+                        successMessage += `\n\n🧠 Predictions Generated:`;
+                        successMessage += `\n• Total: ${pred.total_predictions}`;
+                        successMessage += `\n• High Risk: ${pred.high_risk}`;
+                        successMessage += `\n• Medium Risk: ${pred.medium_risk}`;
+                        successMessage += `\n• Low Risk: ${pred.low_risk}`;
                     }
                     
-                    successContent.innerHTML = '<strong>🎉 Enhanced Sync Completed!</strong>';
-                    successDetails.innerHTML = performanceHtml;
+                    // Add performance info
+                    if (data.performance) {
+                        successMessage += `\n\n⚡ Performance:`;
+                        successMessage += `\n• ${data.performance.records_per_second} records/sec`;
+                        successMessage += `\n• ${data.performance.sync_duration}s duration`;
+                        if (data.performance.predictions_generated) {
+                            successMessage += `\n• ${data.performance.predictions_generated} predictions`;
+                        }
+                    }
                     
-                    // Show success alert
-                    successAlert.style.display = 'block';
-                    successAlert.classList.add('show');
+                    alert(successMessage);
                     
-                    // Reload page after 4 seconds to show updated data
+                    // Reload page to show updated data
                     setTimeout(() => {
                         window.location.reload();
-                    }, 4000);
+                    }, 2000);
                 } else {
-                    // Show error message
                     alert(`❌ Enhanced Sync Failed!\n\n${data.message}`);
-                    
-                    // Re-enable button
-                    startSyncButton.disabled = false;
-                    {% if connection_info.postgresql_configured %}
-                    startSyncButton.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Start Fast Sync';
-                    {% else %}
-                    startSyncButton.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Start Sync';
-                    {% endif %}
                 }
             })
             .catch(error => {
-                // Hide sync alert
-                syncAlert.classList.remove('show');
-                setTimeout(() => { syncAlert.style.display = 'none'; }, 300);
-                
-                // Show error
-                alert('❌ Sync Error: ' + error.message);
-                
+                hideSyncProgress();
+                alert('❌ Enhanced Sync Error: ' + error.message);
+            })
+            .finally(() => {
                 // Re-enable button
                 startSyncButton.disabled = false;
                 {% if connection_info.postgresql_configured %}
-                startSyncButton.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Start Fast Sync';
+                startSyncButton.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Start Enhanced Sync';
                 {% else %}
                 startSyncButton.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Start Sync';
                 {% endif %}
@@ -698,38 +669,222 @@ Your CRM integration is performing excellently!`;
         });
     }
     
-    // Reset sync button handler
-    if (resetSyncButton) {
-        resetSyncButton.addEventListener('click', function() {
-            if (confirm('Are you sure you want to reset the sync status?')) {
-                resetSyncButton.disabled = true;
-                resetSyncButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Resetting...';
-                
-                fetch('{{ url_for("company.sync_status") }}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
+    // ✅ NEW: Prediction-specific functions
+    window.viewPredictionSummary = function() {
+        predictionModal.show();
+        
+        fetch('/crm/predictions/summary')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const stats = data.prediction_stats;
+                    const highRisk = data.high_risk_customers;
+                    
+                    let content = `
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6>Prediction Statistics</h6>
+                                <ul class="list-group">
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        Total Customers
+                                        <span class="badge bg-primary rounded-pill">${stats.total_customers}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        With Predictions
+                                        <span class="badge bg-info rounded-pill">${stats.customers_with_predictions}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        High Risk (90+ days)
+                                        <span class="badge bg-danger rounded-pill">${stats.high_risk}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        Medium Risk (60+ days)
+                                        <span class="badge bg-warning rounded-pill">${stats.medium_risk}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        Low Risk
+                                        <span class="badge bg-success rounded-pill">${stats.low_risk}</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Average Churn Risk</h6>
+                                <div class="text-center mb-3">
+                                    <h3>${(stats.avg_churn_probability * 100).toFixed(1)}%</h3>
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar bg-${stats.avg_churn_probability > 0.6 ? 'danger' : stats.avg_churn_probability > 0.3 ? 'warning' : 'success'}" 
+                                             style="width: ${stats.avg_churn_probability * 100}%">
+                                        </div>
+                                    </div>
+                                </div>
+                                ${stats.last_prediction_date ? `<small class="text-muted">Last updated: ${new Date(stats.last_prediction_date).toLocaleString()}</small>` : ''}
+                            </div>
+                        </div>`;
+                    
+                    if (highRisk.length > 0) {
+                        content += `
+                            <h6>Top High-Risk Customers (Immediate Action Required)</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Customer</th>
+                                            <th>Risk %</th>
+                                            <th>Phone</th>
+                                            <th>Last Payment</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>`;
+                        
+                        highRisk.forEach(customer => {
+                            content += `
+                                <tr>
+                                    <td><strong>${customer.name}</strong></td>
+                                    <td><span class="badge bg-danger">${(customer.probability * 100).toFixed(1)}%</span></td>
+                                    <td>${customer.phone || 'N/A'}</td>
+                                    <td>${customer.last_payment_date ? new Date(customer.last_payment_date).toLocaleDateString() : 'No recent payments'}</td>
+                                </tr>`;
+                        });
+                        
+                        content += `
+                                    </tbody>
+                                </table>
+                            </div>`;
                     }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert(data.message);
-                        window.location.reload();
-                    } else {
-                        alert('Error: ' + data.message);
-                        resetSyncButton.disabled = false;
-                        resetSyncButton.innerHTML = '<i class="fas fa-redo me-2"></i>Reset Sync';
-                    }
-                })
-                .catch(error => {
-                    alert('Error resetting sync: ' + error);
-                    resetSyncButton.disabled = false;
-                    resetSyncButton.innerHTML = '<i class="fas fa-redo me-2"></i>Reset Sync';
-                });
-            }
-        });
+                    
+                    document.getElementById('predictionContent').innerHTML = content;
+                } else {
+                    document.getElementById('predictionContent').innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            ${data.message || 'Unable to load prediction data'}
+                        </div>`;
+                }
+            })
+            .catch(error => {
+                document.getElementById('predictionContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-times me-2"></i>
+                        Error loading predictions: ${error.message}
+                    </div>`;
+            });
+    };
+    
+    window.regeneratePredictions = function() {
+        if (confirm('Regenerate predictions for all customers? This may take a few minutes.')) {
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Regenerating...';
+            
+            fetch('/crm/predictions/regenerate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`✅ Predictions Updated!\n\n${data.message}`);
+                    window.location.reload();
+                } else {
+                    alert(`❌ Prediction Update Failed!\n\n${data.message}`);
+                }
+            })
+            .catch(error => {
+                alert('❌ Error: ' + error.message);
+            })
+            .finally(() => {
+                button.disabled = false;
+                button.innerHTML = originalText;
+            });
+        }
+    };
+    
+    window.viewHighRiskCustomers = function() {
+        window.location.href = '{{ url_for("crm.customers", risk="high") }}';
+    };
+    
+    window.showConnectionInfo = function() {
+        const message = `Enhanced PostgreSQL Connection with Predictions
+
+✅ Direct database access to all 4 tables
+🧠 Payment-based churn prediction (n.py logic)
+⚡ Multi-table customer mapping
+📊 Real-time risk assessment
+💾 Enhanced performance
+🎯 Business recommendation engine
+
+Tables Connected:
+• crm_customers (customer profiles)
+• nav_mpesa_transactions (payment behavior)
+• crm_tickets (support history)
+• spl_statistics (usage patterns)
+
+Your enhanced CRM integration is performing excellently!`;
+        alert(message);
+    };
+    
+    // Helper functions
+    function showSyncProgress() {
+        // Create or show progress indicator
+        let progressAlert = document.getElementById('syncProgressAlert');
+        if (!progressAlert) {
+            progressAlert = document.createElement('div');
+            progressAlert.id = 'syncProgressAlert';
+            progressAlert.className = 'alert alert-info alert-dismissible fade show position-fixed';
+            progressAlert.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            progressAlert.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <div class="spinner-border spinner-border-sm me-3" role="status"></div>
+                    <div>
+                        <strong>Enhanced sync in progress...</strong>
+                        <p class="mb-0 small">Processing customers, payments, tickets, usage, and generating predictions...</p>
+                    </div>
+                </div>`;
+            document.body.appendChild(progressAlert);
+        } else {
+            progressAlert.style.display = 'block';
+            progressAlert.classList.add('show');
+        }
+    }
+    
+    function hideSyncProgress() {
+        const progressAlert = document.getElementById('syncProgressAlert');
+        if (progressAlert) {
+            progressAlert.classList.remove('show');
+            setTimeout(() => {
+                progressAlert.style.display = 'none';
+            }, 300);
+        }
     }
 });
 </script>
+
+<!-- ✅ Enhanced CSS for prediction features -->
+<style>
+.border-left-primary { border-left: 4px solid #007bff !important; }
+.border-left-success { border-left: 4px solid #28a745 !important; }
+.border-left-info { border-left: 4px solid #17a2b8 !important; }
+.border-left-warning { border-left: 4px solid #ffc107 !important; }
+.border-left-danger { border-left: 4px solid #dc3545 !important; }
+.border-left-secondary { border-left: 4px solid #6c757d !important; }
+
+/* Enhanced prediction styling */
+.prediction-highlight {
+    animation: predictionPulse 2s ease-in-out infinite;
+}
+
+@keyframes predictionPulse {
+    0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+}
+
+.high-risk-alert {
+    border-left: 5px solid #dc3545 !important;
+    background: linear-gradient(90deg, rgba(220,53,69,0.1) 0%, rgba(255,255,255,1) 100%);
+}
+</style>
 {% endblock %}
