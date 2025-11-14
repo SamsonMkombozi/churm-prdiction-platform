@@ -186,7 +186,7 @@ def index():
                 high_risk_customers_list = Customer.query.filter_by(
                     company_id=company.id,
                     churn_risk='high'
-                ).order_by(desc(Customer.churn_probability)).limit(10).all()
+                ).order_by(desc(Customer.churn_probability)).limit(10000000000000000000000000).all()
                 
                 logger.info(f"🎯 Found {len(high_risk_customers_list)} real high-risk customers")
                 

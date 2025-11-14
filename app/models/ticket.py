@@ -16,25 +16,24 @@ class Ticket(db.Model):
     
     # CRM Fields
     crm_ticket_id = db.Column(db.String(100), index=True)
-    ticket_number = db.Column(db.String(50))
+    ticket_number = db.Column(db.String(100))
     
     # Ticket Information
-    title = db.Column(db.String(255))
+    title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)
-    category = db.Column(db.String(100))  # technical, billing, service, complaint
-    priority = db.Column(db.String(20))  # low, medium, high, urgent
-    status = db.Column(db.String(50))  # open, in_progress, resolved, closed
-    
-    # Resolution
-    resolution = db.Column(db.Text)
-    resolved_at = db.Column(db.DateTime)
-    resolution_time_hours = db.Column(db.Float)  # Time to resolve in hours
+    category = db.Column(db.String(100))
+    priority = db.Column(db.String(20), default='medium')  # low, medium, high, urgent
+    status = db.Column(db.String(20), default='open')  # open, in_progress, resolved, closed
     
     # Assignment
     assigned_to = db.Column(db.String(100))
     department = db.Column(db.String(100))
     
-    # Timestamps
+    # Resolution
+    resolution = db.Column(db.Text)
+    resolved_at = db.Column(db.DateTime)
+    
+    # Metadata
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     synced_at = db.Column(db.DateTime)
@@ -43,18 +42,12 @@ class Ticket(db.Model):
     __table_args__ = (
         db.Index('idx_ticket_company_customer', 'company_id', 'customer_id'),
         db.Index('idx_ticket_status', 'company_id', 'status'),
+        db.Index('idx_ticket_priority', 'company_id', 'priority'),
         db.Index('idx_ticket_crm', 'company_id', 'crm_ticket_id'),
     )
     
     def __repr__(self):
-        return f'<Ticket {self.ticket_number} - {self.title}>'
-    
-    def calculate_resolution_time(self):
-        """Calculate time taken to resolve ticket"""
-        if self.resolved_at and self.created_at:
-            delta = self.resolved_at - self.created_at
-            self.resolution_time_hours = delta.total_seconds() / 3600
-        return self.resolution_time_hours
+        return f'<Ticket {self.ticket_number} - {self.title[:50]}>'
     
     def to_dict(self):
         """Convert ticket to dictionary"""
@@ -63,12 +56,16 @@ class Ticket(db.Model):
             'crm_ticket_id': self.crm_ticket_id,
             'ticket_number': self.ticket_number,
             'title': self.title,
+            'description': self.description,
             'category': self.category,
             'priority': self.priority,
             'status': self.status,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'assigned_to': self.assigned_to,
+            'department': self.department,
+            'resolution': self.resolution,
             'resolved_at': self.resolved_at.isoformat() if self.resolved_at else None,
-            'resolution_time_hours': self.resolution_time_hours,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
     
     @staticmethod
@@ -80,9 +77,27 @@ class Ticket(db.Model):
         ).first()
     
     @staticmethod
-    def get_open_tickets(company_id):
-        """Get all open tickets for a company"""
-        return Ticket.query.filter_by(
+    def get_open_tickets(company_id, limit=None):
+        """Get open tickets for a company"""
+        query = Ticket.query.filter_by(
             company_id=company_id,
             status='open'
-        ).all()
+        ).order_by(Ticket.priority.desc(), Ticket.created_at.desc())
+        
+        if limit:
+            query = query.limit(limit)
+        
+        return query.all()
+    
+    @staticmethod
+    def get_high_priority_tickets(company_id, limit=None):
+        """Get high-priority tickets"""
+        query = Ticket.query.filter_by(
+            company_id=company_id,
+            priority='high'
+        ).order_by(Ticket.created_at.desc())
+        
+        if limit:
+            query = query.limit(limit)
+        
+        return query.all()
