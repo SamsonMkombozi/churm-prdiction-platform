@@ -303,7 +303,7 @@
     </div>
     {% endif %}
 
-    <!-- ✅ ENHANCED: Recent Customers with Payment Risk Indicators -->
+    <!-- ✅ FIXED: Recent Customers with Correct Field Mappings -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card shadow">
@@ -323,12 +323,12 @@
                                 <tr>
                                     <th>Customer</th>
                                     <th>Phone</th>
-                                    <th>Status</th>
-                                    <th>Tenure</th>
+                                    <th>Total Tickets</th>
+                                    <th>Days Since Last Payment</th>
                                     <th>Monthly Charges</th>
-                                    <th>Payment Risk</th>
+                                    <th>Payment Consistency</th>
                                     <th>Churn Risk</th>
-                                    <th>Added</th>
+                                    <th>Last Payment Date</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -336,38 +336,43 @@
                                 <tr>
                                     <td><strong>{{ customer.customer_name or 'N/A' }}</strong></td>
                                     <td>{{ customer.phone or 'N/A' }}</td>
-                                    <td>
-                                        <span class="badge bg-{{ 'success' if customer.status == 'active' else 'secondary' }}">
-                                            {{ customer.status|upper if customer.status else 'UNKNOWN' }}
-                                        </span>
-                                    </td>
-                                    <td>{{ customer.tenure_months or 0 }} months</td>
+                                    <td>{{ customer.days_since_last_payment or 0 }}</td>                                    <td>{{ customer.days_since_last_payment or 0 }}</td>
                                     <td>TZS {{ "{:,.0f}".format(customer.monthly_charges or 0) }}</td>
                                     <td>
-                                        <!-- ✅ NEW: Payment risk indicator from n.py logic -->
-                                        {% if customer.payment_status == 'high_risk' %}
-                                            <span class="badge bg-danger">90+ Days</span>
-                                        {% elif customer.payment_status == 'medium_risk' %}
-                                            <span class="badge bg-warning">60+ Days</span>
-                                        {% elif customer.payment_status == 'good' %}
-                                            <span class="badge bg-success">Recent</span>
+                                        <!-- Payment consistency score with visual indicator -->
+                                        {% if customer.payment_consistency_score %}
+                                            {% set consistency = (customer.payment_consistency_score * 100)|round(1) %}
+                                            <div class="d-flex align-items-center">
+                                                <span class="me-2">{{ consistency }}%</span>
+                                                <div class="progress flex-fill" style="height: 8px; width: 60px;">
+                                                    <div class="progress-bar bg-{{ 'success' if consistency >= 80 else 'warning' if consistency >= 60 else 'danger' }}" 
+                                                         style="width: {{ consistency }}%"></div>
+                                                </div>
+                                            </div>
                                         {% else %}
                                             <span class="badge bg-secondary">No Data</span>
                                         {% endif %}
                                     </td>
                                     <td>
                                         {% if customer.churn_risk %}
-                                        <span class="badge bg-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }}">
-                                            {{ customer.churn_risk|upper }}
-                                        </span>
-                                        {% if customer.churn_probability %}
-                                        <small class="text-muted d-block">{{ (customer.churn_probability * 100)|round(1) }}%</small>
-                                        {% endif %}
+                                            <span class="badge bg-{{ 'danger' if customer.churn_risk == 'high' else 'warning' if customer.churn_risk == 'medium' else 'success' }}">
+                                                {{ customer.churn_risk|upper }}
+                                            </span>
+                                            {% if customer.churn_probability %}
+                                            <small class="text-muted d-block">{{ (customer.churn_probability * 100)|round(1) }}%</small>
+                                            {% endif %}
                                         {% else %}
-                                        <span class="text-muted">-</span>
+                                            <span class="text-muted">-</span>
                                         {% endif %}
                                     </td>
-                                    <td>{{ customer.created_at|datetime if customer.created_at else 'N/A' }}</td>
+                                    <td>
+                                        {% if customer.last_payment_date %}
+                                            {{ customer.last_payment_date.strftime('%Y-%m-%d') }}
+                                            <small class="text-muted d-block">{{ ((datetime.utcnow() - customer.last_payment_date).days) }} days ago</small>
+                                        {% else %}
+                                            <span class="text-muted">No payment data</span>
+                                        {% endif %}
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>

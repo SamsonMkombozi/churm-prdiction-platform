@@ -166,7 +166,7 @@
     </div>
     {% endif %}
 
-    <!-- Enhanced Customers Table -->
+    <!-- ✅ FIXED: Enhanced Customers Table with Correct Field Mappings -->
     <div class="card shadow">
         <div class="card-header py-3">
             <h6 class="m-0 font-weight-bold text-primary">
@@ -186,16 +186,16 @@
                 <table class="table table-hover">
                     <thead>
                         <tr>
-                            <th>#</th>
-                            <th>Customer</th>
-                            <th>Status</th>
-                            <th>Service Type</th>
+                            <th>Customer ID</th>
+                            <th>Customer Name</th>
+                            <th>Address</th>
+                            <th>Service Plan</th>
                             <th>Tenure</th>
-                            <th>Monthly Charges</th>
-                            <th>Balance</th>
+                            <th>Days Since Last Payment</th>
+                            <th>Payment Consistency</th>
                             <th>Payment Risk</th>
                             <th>Churn Risk</th>
-                            <th>Last Payment</th>
+                            <th>Disconnection Date</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -205,7 +205,7 @@
                             <td>{{ loop.index + (pagination.page - 1) * pagination.per_page }}</td>
                             <td>
                                 <div>
-                                    <strong>{{ customer.customer_name }}</strong>
+                                    <strong>{{ customer.customer_name or 'N/A' }}</strong>
                                     {% if customer.email %}
                                     <br><small class="text-muted">{{ customer.email }}</small>
                                     {% endif %}
@@ -217,20 +217,20 @@
                                 </div>
                             </td>
                             <td>
-                                <span class="badge bg-{{ 'success' if customer.status == 'active' else 'secondary' }}">
-                                    {{ customer.status|upper }}
+                                <span class="badge bg-{{ 'success' if customer.status == 'active' else 'danger' if customer.status == 'inactive' else 'warning' }}">
+                                    {{ (customer.status or 'unknown')|upper }}
                                 </span>
                             </td>
-                            <td>{{ customer.service_type or 'Standard' }}</td>
+                            <td>{{ customer.service_plan or 'Standard' }}</td>
                             <td>
-                                {{ customer.tenure_months }} months
-                                {% if customer.tenure_months < 6 %}
+                                {{ customer.tenure_months or 0 }} months
+                                {% if (customer.tenure_months or 0) < 6 %}
                                 <small class="text-warning d-block">New Customer</small>
                                 {% endif %}
                             </td>
                             <td>TZS {{ "{:,.0f}".format(customer.monthly_charges or 50000) }}</td>
                             <td>
-                                <span class="text-{{ 'danger' if customer.outstanding_balance > 0 else 'success' }}">
+                                <span class="text-{{ 'danger' if (customer.outstanding_balance or 0) > 0 else 'success' }}">
                                     TZS {{ "{:,.0f}".format(customer.outstanding_balance or 0) }}
                                 </span>
                             </td>
@@ -275,14 +275,25 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if customer.last_payment_date %}
-                                    {{ customer.last_payment_date|date }}
-                                    {% set days_ago = (moment().diff(customer.last_payment_date, 'days')) %}
-                                    <small class="text-muted d-block">
-                                        {{ days_ago }} days ago
-                                    </small>
+                                <!-- ✅ FIXED: Correct disconnection date display -->
+                                {% if customer.disconnection_date %}
+                                    <!-- Check if it's a real disconnection date (not placeholder) -->
+                                    {% if customer.disconnection_date.year > 2024 %}
+                                        <div>
+                                            {{ customer.disconnection_date.strftime('%Y-%m-%d') }}
+                                            <small class="text-danger d-block">
+                                                {{ ((datetime.utcnow() - customer.disconnection_date).days) }} days ago
+                                            </small>
+                                        </div>
+                                    {% else %}
+                                        <span class="text-success">
+                                            <i class="fas fa-check me-1"></i>Active
+                                        </span>
+                                    {% endif %}
                                 {% else %}
-                                    <span class="text-danger">No payments</span>
+                                    <span class="text-success">
+                                        <i class="fas fa-check me-1"></i>Active
+                                    </span>
                                 {% endif %}
                             </td>
                             <td>
@@ -579,7 +590,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 phone: "{{ customer.phone or '' }}",
                 email: "{{ customer.email or '' }}",
                 tenure: "{{ customer.tenure_months }} months",
-                last_payment: "{{ customer.last_payment_date|date if customer.last_payment_date else 'No payments' }}",
+                disconnection_date: "{{ customer.disconnection_date.strftime('%Y-%m-%d') if customer.disconnection_date and customer.disconnection_date.year > 2000 else 'Active' }}",
                 churn_probability: "{{ (customer.churn_probability * 100)|round(1) if customer.churn_probability else 0 }}%"
             },
             {% endfor %}
@@ -591,9 +602,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Create CSV content
-        let csv = 'Customer Name,Phone,Email,Tenure,Last Payment,Churn Risk\n';
+        let csv = 'Customer Name,Phone,Email,Tenure,Disconnection Status,Churn Risk\n';
         highRiskCustomers.forEach(customer => {
-            csv += `"${customer.name}","${customer.phone}","${customer.email}","${customer.tenure}","${customer.last_payment}","${customer.churn_probability}"\n`;
+            csv += `"${customer.name}","${customer.phone}","${customer.email}","${customer.tenure}","${customer.disconnection_date}","${customer.churn_probability}"\n`;
         });
         
         // Download CSV

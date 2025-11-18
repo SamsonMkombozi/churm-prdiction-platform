@@ -1,0 +1,211 @@
+"""
+FIXED User Model - Resolves SQLAlchemy Relationship Conflicts
+app/models/user.py
+
+✅ FIXES:
+1. Resolved circular relationship issue with Company model
+2. Proper back_populates configuration
+3. All existing functionality preserved
+
+🔧 RELATIONSHIP FIX: Uses back_populates to avoid circular relationship conflicts
+"""
+
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import UserMixin
+from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
+from app.extensions import db
+
+class User(UserMixin, db.Model):
+    __tablename__ = 'users'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    
+    # User profile information
+    first_name = db.Column(db.String(100))
+    last_name = db.Column(db.String(100))
+    phone = db.Column(db.String(20))
+    
+    # Company relationship
+    company_id = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=True)
+    
+    # Role and permissions
+    role = db.Column(db.String(20), default='user')  # admin, manager, user
+    is_active = db.Column(db.Boolean, default=True)
+    is_verified = db.Column(db.Boolean, default=False)
+    
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_login = db.Column(db.DateTime)
+    
+    # Settings and preferences
+    timezone = db.Column(db.String(50), default='Africa/Nairobi')
+    language = db.Column(db.String(10), default='en')
+    notifications_enabled = db.Column(db.Boolean, default=True)
+    
+    # ===== FIXED RELATIONSHIPS =====
+    # 🔧 FIX: Use back_populates to avoid circular relationship conflicts
+    company = db.relationship('Company', back_populates='users')
+    
+    def __repr__(self):
+        return f'<User {self.username}>'
+    
+    @property
+    def full_name(self):
+        """Get user's full name"""
+        if self.first_name and self.last_name:
+            return f"{self.first_name} {self.last_name}"
+        elif self.first_name:
+            return self.first_name
+        elif self.last_name:
+            return self.last_name
+        else:
+            return self.username
+    
+    @property
+    def display_name(self):
+        """Get display name for UI"""
+        return self.full_name
+    
+    def set_password(self, password):
+        """Set password hash"""
+        self.password_hash = generate_password_hash(password)
+    
+    def check_password(self, password):
+        """Check password against hash"""
+        return check_password_hash(self.password_hash, password)
+    
+    def is_admin(self):
+        """Check if user is admin"""
+        return self.role == 'admin'
+    
+    def is_manager(self):
+        """Check if user is manager or admin"""
+        return self.role in ['admin', 'manager']
+    
+    def can_manage_company(self):
+        """Check if user can manage company settings"""
+        return self.is_manager() and self.company_id is not None
+    
+    def update_last_login(self):
+        """Update last login timestamp"""
+        self.last_login = datetime.utcnow()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+    
+    def to_dict(self):
+        """Convert user to dictionary for API responses"""
+        return {
+            'id': self.id,
+            'username': self.username,
+            'email': self.email,
+            'full_name': self.full_name,
+            'role': self.role,
+            'company_id': self.company_id,
+            'company_name': self.company.name if self.company else None,
+            'is_active': self.is_active,
+            'is_verified': self.is_verified,
+            'last_login': self.last_login.isoformat() if self.last_login else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'timezone': self.timezone,
+            'language': self.language
+        }
+    
+    @staticmethod
+    def create_user(username, email, password, company_id=None, role='user', **kwargs):
+        """Create a new user"""
+        try:
+            user = User(
+                username=username,
+                email=email,
+                company_id=company_id,
+                role=role,
+                created_at=datetime.utcnow(),
+                **kwargs
+            )
+            user.set_password(password)
+            
+            db.session.add(user)
+            db.session.commit()
+            
+            return user
+        except Exception as e:
+            db.session.rollback()
+            raise e
+    
+    @staticmethod
+    def get_by_email(email):
+        """Get user by email"""
+        return User.query.filter_by(email=email).first()
+    
+    @staticmethod
+    def get_by_username(username):
+        """Get user by username"""
+        return User.query.filter_by(username=username).first()
+    
+    @staticmethod
+    def authenticate(login, password):
+        """Authenticate user by email or username"""
+        user = User.get_by_email(login) or User.get_by_username(login)
+        
+        if user and user.check_password(password) and user.is_active:
+            user.update_last_login()
+            return user
+        
+        return None
+    
+    def update_profile(self, **kwargs):
+        """Update user profile"""
+        try:
+            for key, value in kwargs.items():
+                if hasattr(self, key) and key not in ['id', 'password_hash', 'created_at']:
+                    setattr(self, key, value)
+            
+            self.updated_at = datetime.utcnow()
+            db.session.commit()
+            return True
+        except Exception as e:
+            db.session.rollback()
+            raise e
+    
+    def change_password(self, old_password, new_password):
+        """Change user password"""
+        if not self.check_password(old_password):
+            return False, "Current password is incorrect"
+        
+        try:
+            self.set_password(new_password)
+            self.updated_at = datetime.utcnow()
+            db.session.commit()
+            return True, "Password changed successfully"
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Password change failed: {str(e)}"
+    
+    def deactivate(self):
+        """Deactivate user account"""
+        try:
+            self.is_active = False
+            self.updated_at = datetime.utcnow()
+            db.session.commit()
+            return True
+        except Exception as e:
+            db.session.rollback()
+            return False
+    
+    def activate(self):
+        """Activate user account"""
+        try:
+            self.is_active = True
+            self.updated_at = datetime.utcnow()
+            db.session.commit()
+            return True
+        except Exception as e:
+            db.session.rollback()
+            return False

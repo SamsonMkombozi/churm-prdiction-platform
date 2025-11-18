@@ -179,64 +179,18 @@ class DisconnectionBasedCRMService:
             # STEP 2: Store payment records to SQLite
             if sync_options.get('sync_payments', True) and sync_options.get('store_payment_records', True):
                 logger.info("[2/6] Storing payment records to SQLite...")
-                logger.info("   → Storing individual payment records...")
+                self._store_payment_records(cursor)
             
-            try:
-                # Get payment data from PostgreSQL  
-                payment_query = """
-                SELECT 
-                    mp.account_no as customer_id,
-                    COUNT(*) as total_payments,
-                    COUNT(CASE WHEN mp.posted_to_ledgers = 1 AND mp.is_refund = 0 THEN 1 END) as successful_payments,
-                    SUM(CASE WHEN mp.posted_to_ledgers = 1 AND mp.is_refund = 0 THEN mp.tx_amount ELSE 0 END) as total_paid_amount,
-                    MAX(CASE WHEN mp.posted_to_ledgers = 1 AND mp.is_refund = 0 THEN mp.tx_time END) as last_payment_date,
-                    CASE 
-                        WHEN COUNT(*) > 0 THEN 
-                            COUNT(CASE WHEN mp.posted_to_ledgers = 1 AND mp.is_refund = 0 THEN 1 END)::FLOAT / COUNT(*)::FLOAT
-                        ELSE 1.0 
-                    END as payment_consistency_score
-                FROM nav_mpesa_transactions mp
-                WHERE mp.tx_time >= CURRENT_DATE - INTERVAL '2 years'
-                GROUP BY mp.account_no
-                LIMIT 10000
-            """
-                cursor.execute(payment_query)
-                payment_results = cursor.fetchall()
-                
-                # Store payment summaries directly
-                self._store_payment_summaries(cursor, payment_results)
-                
-            except Exception as e:
-                logger.error(f"Payment storage failed: {e}")
-
-            logger.info("[3/6] Storing ticket records to SQLite...")
-            logger.info("   → Storing individual ticket records...")
+            # STEP 3: Store ticket records to SQLite
+            if sync_options.get('sync_tickets', True) and sync_options.get('store_ticket_records', True):
+                logger.info("[3/6] Storing ticket records to SQLite...")
+                self._store_ticket_records(cursor)
             
-            try:
-                # Get ticket data from PostgreSQL
-                ticket_query = """
-                SELECT 
-                    t.customer_no as customer_id,
-                    COUNT(*) as total_tickets,
-                    COUNT(CASE WHEN t.status = 'open' THEN 1 END) as open_tickets,
-                    COUNT(CASE WHEN t.priority IN ('high', 'urgent') THEN 1 END) as complaint_tickets
-                FROM crm_tickets t
-                WHERE t.created_at >= CURRENT_DATE - INTERVAL '2 years'
-                GROUP BY t.customer_no
-                LIMIT 5000
-            """
-                cursor.execute(ticket_query)
-                ticket_results = cursor.fetchall()
-                
-                # Store ticket summaries directly
-                self._store_ticket_summaries(cursor, ticket_results)
-                
+            # STEP 4: Store usage statistics to SQLite
+            if sync_options.get('sync_usage', True) and sync_options.get('store_usage_records', True):
+                logger.info("[4/6] Storing usage statistics to SQLite...")
+                self._store_usage_statistics(cursor)
             
-            except Exception as e:
-                logger.error(f"Ticket storage failed: {e}")
-
-            logger.info("[4/6] Storing usage statistics to SQLite...")
-            self._store_usage_statistics(cursor)
             # STEP 5: Generate disconnection-based churn predictions
             if sync_options.get('generate_predictions', True):
                 logger.info("[5/6] Generating disconnection-based churn predictions...")
@@ -372,6 +326,7 @@ class DisconnectionBasedCRMService:
                     COUNT(CASE WHEN mp.posted_to_ledgers = 1 AND mp.is_refund = 0 THEN 1 END) as successful_payments,
                     SUM(CASE WHEN mp.posted_to_ledgers = 1 AND mp.is_refund = 0 THEN mp.tx_amount ELSE 0 END) as total_paid_amount,
                     MAX(CASE WHEN mp.posted_to_ledgers = 1 AND mp.is_refund = 0 THEN mp.tx_time END) as last_payment_date,
+                    -- Calculate payment consistency
                     CASE 
                         WHEN COUNT(*) > 0 THEN 
                             COUNT(CASE WHEN mp.posted_to_ledgers = 1 AND mp.is_refund = 0 THEN 1 END)::FLOAT / COUNT(*)::FLOAT
@@ -382,22 +337,6 @@ class DisconnectionBasedCRMService:
                 GROUP BY mp.account_no
             """
             
-            payment_query = """
-                SELECT 
-                    mp.account_no as customer_id,
-                    COUNT(*) as total_payments,
-                    COUNT(CASE WHEN mp.posted_to_ledgers = 1 AND mp.is_refund = 0 THEN 1 END) as successful_payments,
-                    SUM(CASE WHEN mp.posted_to_ledgers = 1 AND mp.is_refund = 0 THEN mp.tx_amount ELSE 0 END) as total_paid_amount,
-                    MAX(CASE WHEN mp.posted_to_ledgers = 1 AND mp.is_refund = 0 THEN mp.tx_time END) as last_payment_date,
-                    CASE 
-                        WHEN COUNT(*) > 0 THEN 
-                            COUNT(CASE WHEN mp.posted_to_ledgers = 1 AND mp.is_refund = 0 THEN 1 END)::FLOAT / COUNT(*)::FLOAT
-                        ELSE 1.0 
-                    END as payment_consistency_score
-                FROM nav_mpesa_transactions mp
-                WHERE mp.tx_time >= CURRENT_DATE - INTERVAL '2 years'
-                GROUP BY mp.account_no
-            """
             cursor.execute(payment_query)
             payment_data = cursor.fetchall()
             self.query_times['payments'] = round(time.time() - start_time, 2)
@@ -418,22 +357,12 @@ class DisconnectionBasedCRMService:
                     t.customer_no as customer_id,
                     COUNT(*) as total_tickets,
                     COUNT(CASE WHEN t.status = 'open' THEN 1 END) as open_tickets,
-                    COUNT(CASE WHEN t.priority IN ('high', 'urgent')  THEN 1 END) as complaint_tickets
+                    COUNT(CASE WHEN t.priority IN ('high', 'urgent') OR t.type ILIKE '%complaint%' THEN 1 END) as complaint_tickets
                 FROM crm_tickets t
                 WHERE t.created_at >= CURRENT_DATE - INTERVAL '2 years'
                 GROUP BY t.customer_no
             """
             
-            ticket_query = """
-                SELECT 
-                    t.customer_no as customer_id,
-                    COUNT(*) as total_tickets,
-                    COUNT(CASE WHEN t.status = 'open' THEN 1 END) as open_tickets,
-                    COUNT(CASE WHEN t.priority IN ('high', 'urgent') THEN 1 END) as complaint_tickets
-                FROM crm_tickets t
-                WHERE t.created_at >= CURRENT_DATE - INTERVAL '2 years'
-                GROUP BY t.customer_no
-            """
             cursor.execute(ticket_query)
             ticket_data = cursor.fetchall()
             self.query_times['tickets'] = round(time.time() - start_time, 2)
@@ -816,6 +745,7 @@ class DisconnectionBasedCRMService:
                     mp.account_no as customer_id,
                     mp.tx_time as payment_date,
                     mp.tx_amount as amount,
+                    mp.payment_method,
                     mp.transaction_id,
                     mp.posted_to_ledgers,
                     mp.is_refund,
@@ -827,22 +757,6 @@ class DisconnectionBasedCRMService:
                 LIMIT 10000
             """
             
-            payment_query = """
-                SELECT 
-                    mp.account_no as customer_id,
-                    COUNT(*) as total_payments,
-                    COUNT(CASE WHEN mp.posted_to_ledgers = 1 AND mp.is_refund = 0 THEN 1 END) as successful_payments,
-                    SUM(CASE WHEN mp.posted_to_ledgers = 1 AND mp.is_refund = 0 THEN mp.tx_amount ELSE 0 END) as total_paid_amount,
-                    MAX(CASE WHEN mp.posted_to_ledgers = 1 AND mp.is_refund = 0 THEN mp.tx_time END) as last_payment_date,
-                    CASE 
-                        WHEN COUNT(*) > 0 THEN 
-                            COUNT(CASE WHEN mp.posted_to_ledgers = 1 AND mp.is_refund = 0 THEN 1 END)::FLOAT / COUNT(*)::FLOAT
-                        ELSE 1.0 
-                    END as payment_consistency_score
-                FROM nav_mpesa_transactions mp
-                WHERE mp.tx_time >= CURRENT_DATE - INTERVAL '2 years'
-                GROUP BY mp.account_no
-            """
             cursor.execute(payment_query)
             payment_records = cursor.fetchall()
             
@@ -919,6 +833,7 @@ class DisconnectionBasedCRMService:
                     t.description,
                     t.status,
                     t.priority,
+                    t.type,
                     t.created_at,
                     t.updated_at,
                     COALESCE(t.ticket_number, CONCAT('TKT-', t.id)) as ticket_number
@@ -929,16 +844,6 @@ class DisconnectionBasedCRMService:
                 LIMIT 5000
             """
             
-            ticket_query = """
-                SELECT 
-                    t.customer_no as customer_id,
-                    COUNT(*) as total_tickets,
-                    COUNT(CASE WHEN t.status = 'open' THEN 1 END) as open_tickets,
-                    COUNT(CASE WHEN t.priority IN ('high', 'urgent') THEN 1 END) as complaint_tickets
-                FROM crm_tickets t
-                WHERE t.created_at >= CURRENT_DATE - INTERVAL '2 years'
-                GROUP BY t.customer_no
-            """
             cursor.execute(ticket_query)
             ticket_records = cursor.fetchall()
             
@@ -1018,144 +923,6 @@ class DisconnectionBasedCRMService:
             logger.error(f"Usage statistics storage failed: {e}")
             self.sync_stats['usage_stats']['errors'] += 1
     
-    
-    def _store_payment_summaries(self, cursor, payment_results):
-        """Store payment summaries from PostgreSQL results"""
-        
-        try:
-            logger.info("   → Processing payment summaries...")
-            start_time = time.time()
-            
-            stored_count = 0
-            
-            for payment_row in payment_results:
-                try:
-                    customer_id = str(payment_row['customer_id'])
-                    
-                    # Find the customer in our system
-                    internal_customer_id = self.customer_cache.get(customer_id)
-                    if not internal_customer_id:
-                        continue
-                    
-                    # Create a payment summary record
-                    from app.models.payment import Payment
-                    
-                    # Check if summary already exists
-                    existing_payment = Payment.query.filter_by(
-                        company_id=self.company.id,
-                        customer_id=internal_customer_id,
-                        transaction_id=f"summary_{customer_id}_2024"
-                    ).first()
-                    
-                    if not existing_payment:
-                        payment = Payment(
-                            company_id=self.company.id,
-                            customer_id=internal_customer_id,
-                            amount=float(payment_row.get('total_paid_amount') or 0),
-                            payment_date=payment_row.get('last_payment_date') or datetime.utcnow(),
-                            payment_method='M-Pesa Summary',
-                            transaction_id=f"summary_{customer_id}_2024",
-                            status='completed',
-                            description=f"Summary: {payment_row.get('successful_payments', 0)} payments",
-                            created_at=datetime.utcnow()
-                        )
-                        
-                        db.session.add(payment)
-                        stored_count += 1
-                        
-                        if stored_count % 100 == 0:
-                            db.session.commit()
-                    
-                except Exception as e:
-                    logger.warning(f"Payment summary error for {customer_id}: {e}")
-                    continue
-            
-            # Final commit
-            try:
-                db.session.commit()
-            except Exception as e:
-                logger.warning(f"Payment commit failed: {e}")
-                db.session.rollback()
-            
-            self.sync_stats['payments']['stored'] = stored_count
-            self.query_times['payment_storage'] = round(time.time() - start_time, 2)
-            
-            logger.info(f"   ✅ Stored {stored_count:,} payment summaries in {self.query_times['payment_storage']}s")
-            
-        except Exception as e:
-            logger.error(f"Payment summary storage failed: {e}")
-            self.sync_stats['payments']['errors'] += 1
-
-    def _store_ticket_summaries(self, cursor, ticket_results):
-        """Store ticket summaries from PostgreSQL results"""
-        
-        try:
-            logger.info("   → Processing ticket summaries...")
-            start_time = time.time()
-            
-            stored_count = 0
-            
-            for ticket_row in ticket_results:
-                try:
-                    customer_id = str(ticket_row['customer_id'])
-                    
-                    # Find the customer in our system
-                    internal_customer_id = self.customer_cache.get(customer_id)
-                    if not internal_customer_id:
-                        continue
-                    
-                    # Create a ticket summary record
-                    from app.models.ticket import Ticket
-                    
-                    # Check if summary already exists
-                    existing_ticket = Ticket.query.filter_by(
-                        company_id=self.company.id,
-                        customer_id=internal_customer_id,
-                        ticket_number=f"summary_{customer_id}_2024"
-                    ).first()
-                    
-                    if not existing_ticket:
-                        total_tickets = ticket_row.get('total_tickets', 0)
-                        open_tickets = ticket_row.get('open_tickets', 0)
-                        
-                        ticket = Ticket(
-                            company_id=self.company.id,
-                            customer_id=internal_customer_id,
-                            title=f"Support Summary - {total_tickets} tickets",
-                            description=f"Total: {total_tickets}, Open: {open_tickets}, High Priority: {ticket_row.get('complaint_tickets', 0)}",
-                            status='open' if open_tickets > 0 else 'closed',
-                            priority='medium',
-                            ticket_number=f"summary_{customer_id}_2024",
-                            created_at=datetime.utcnow(),
-                            updated_at=datetime.utcnow()
-                        )
-                        
-                        db.session.add(ticket)
-                        stored_count += 1
-                        
-                        if stored_count % 50 == 0:
-                            db.session.commit()
-                    
-                except Exception as e:
-                    logger.warning(f"Ticket summary error for {customer_id}: {e}")
-                    continue
-            
-            # Final commit
-            try:
-                db.session.commit()
-            except Exception as e:
-                logger.warning(f"Ticket commit failed: {e}")
-                db.session.rollback()
-            
-            self.sync_stats['tickets']['stored'] = stored_count
-            self.query_times['ticket_storage'] = round(time.time() - start_time, 2)
-            
-            logger.info(f"   ✅ Stored {stored_count:,} ticket summaries in {self.query_times['ticket_storage']}s")
-            
-        except Exception as e:
-            logger.error(f"Ticket summary storage failed: {e}")
-            self.sync_stats['tickets']['errors'] += 1
-
     def _generate_disconnection_based_predictions(self):
         """Generate disconnection-based churn predictions for all customers"""
         
