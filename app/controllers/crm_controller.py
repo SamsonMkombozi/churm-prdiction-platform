@@ -19,6 +19,7 @@ from sqlalchemy import func, desc, or_
 from datetime import datetime, timedelta
 import traceback
 
+
 crm_bp = Blueprint('crm', __name__)
 
 @crm_bp.route('/dashboard')
@@ -469,7 +470,12 @@ def customers():
                              current_status=status_filter,
                              current_risk=risk_filter,
                              current_search=search_filter,
-                             current_payment_behavior=payment_filter)  # ✅ NEW filter
+                             current_payment_behavior=payment_filter,
+                             datetime=datetime
+                             ) # ✅ NEW filter
+        
+        
+                            
                              
     except Exception as e:
         current_app.logger.error(f"Enhanced customers page error: {str(e)}")
@@ -481,7 +487,9 @@ def customers():
                              customers=[],
                              pagination=type('Pagination', (), {'total': 0, 'pages': 1, 'page': 1, 'per_page': 50, 'has_prev': False, 'has_next': False})(),
                              current_status='', current_risk='', current_search='', current_payment_behavior='',
-                             error_message=str(e))
+                             error_message=str(e),
+                             datetime=datetime
+                             )
 
 # ✅ PRESERVED: All other existing routes (payments, tickets, customer_detail, ticket_detail) remain the same
 # Just import them from the original controller or copy them here
