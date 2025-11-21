@@ -1,5 +1,5 @@
 """
-Enhanced CRM Controller with Integrated Payment-Based Predictions
+Enhanced CRM Controller with Integrated Payment-Based Predictions + Disconnection Filter
 app/controllers/crm_controller.py
 
 ✅ ENHANCED FEATURES:
@@ -7,6 +7,7 @@ app/controllers/crm_controller.py
 2. Multi-table customer mapping (crm_customers, crm_tickets, nav_mpesa_transactions, spl_statistics)
 3. Real-time risk assessment and prediction generation
 4. Enhanced sync performance with prediction analytics
+5. ✅ NEW: Disconnection status filter for customer management
 """
 
 from flask import Blueprint, render_template, request, jsonify, current_app, redirect, url_for
@@ -401,12 +402,12 @@ def regenerate_predictions():
             'message': f'Failed to regenerate predictions: {str(e)}'
         }), 500
 
-# ✅ PRESERVED: All existing customer, payment, and ticket management routes with enhanced features
+# ✅ ENHANCED: Customer management with disconnection status filter
 
 @crm_bp.route('/customers')
 @login_required
 def customers():
-    """Enhanced customer management page with prediction filtering"""
+    """Enhanced customer management page with disconnection status filter"""
     
     company = current_user.company
     if not company:
@@ -420,6 +421,12 @@ def customers():
         
         # ✅ NEW: Payment behavior filter (from n.py logic)
         payment_filter = request.args.get('payment_behavior', '')
+        
+        # ✅ NEW: Disconnection status filter
+        disconnection_filter = request.args.get('disconnection_status', '')
+        
+        # Debug logging for disconnection filter
+        current_app.logger.info(f"🔍 Disconnection filter applied: '{disconnection_filter}'")
         
         # Get customers with pagination and enhanced filters
         page = request.args.get('page', 1, type=int)
@@ -452,9 +459,28 @@ def customers():
             # Customers with recent payments and low risk
             query = query.filter(Customer.churn_risk == 'low')
         
+        # ✅ NEW: Disconnection status filter
+        if disconnection_filter == 'has_disconnection_date':
+            query = query.filter(Customer.disconnection_date.isnot(None))
+            current_app.logger.info(f"🔍 Filtering for customers WITH disconnection dates")
+        elif disconnection_filter == 'no_disconnection_date':
+            query = query.filter(Customer.disconnection_date.is_(None))
+            current_app.logger.info(f"🔍 Filtering for customers WITHOUT disconnection dates")
+        
         # Calculate enhanced tenure and payment metrics for display
         customers_query = query.order_by(desc(Customer.created_at))
         pagination = customers_query.paginate(page=page, per_page=per_page, error_out=False)
+        
+        # Debug: Log disconnection data summary
+        total_customers = Customer.query.filter_by(company_id=company.id).count()
+        customers_with_dates = Customer.query.filter_by(company_id=company.id).filter(Customer.disconnection_date.isnot(None)).count()
+        customers_without_dates = Customer.query.filter_by(company_id=company.id).filter(Customer.disconnection_date.is_(None)).count()
+        
+        current_app.logger.info(f"📊 DISCONNECTION DATA SUMMARY:")
+        current_app.logger.info(f"   Total customers: {total_customers}")
+        current_app.logger.info(f"   With disconnection dates: {customers_with_dates}")
+        current_app.logger.info(f"   Without disconnection dates: {customers_without_dates}")
+        current_app.logger.info(f"   Filtered result count: {len(pagination.items)}")
         
         for customer in pagination.items:
             if customer.signup_date:
@@ -471,12 +497,9 @@ def customers():
                              current_risk=risk_filter,
                              current_search=search_filter,
                              current_payment_behavior=payment_filter,
-                             datetime=datetime
-                             ) # ✅ NEW filter
+                             current_disconnection_status=disconnection_filter,  # ✅ NEW: Pass disconnection filter
+                             datetime=datetime)
         
-        
-                            
-                             
     except Exception as e:
         current_app.logger.error(f"Enhanced customers page error: {str(e)}")
         current_app.logger.error(traceback.format_exc())
@@ -486,13 +509,11 @@ def customers():
                              company=company,
                              customers=[],
                              pagination=type('Pagination', (), {'total': 0, 'pages': 1, 'page': 1, 'per_page': 50, 'has_prev': False, 'has_next': False})(),
-                             current_status='', current_risk='', current_search='', current_payment_behavior='',
+                             current_status='', current_risk='', current_search='', current_payment_behavior='', current_disconnection_status='',
                              error_message=str(e),
-                             datetime=datetime
-                             )
+                             datetime=datetime)
 
 # ✅ PRESERVED: All other existing routes (payments, tickets, customer_detail, ticket_detail) remain the same
-# Just import them from the original controller or copy them here
 
 @crm_bp.route('/payments')
 @login_required

@@ -572,7 +572,7 @@ class DisconnectionBasedCRMService:
             disconnection_date = None
             days_since_disconnection = 0
             
-            if churned_date and churned_date != '' and churned_date != '0001-01-01':
+            if churned_date and churned_date != '':
                 try:
                     # Handle text-based dates from PostgreSQL
                     if isinstance(churned_date, str):
