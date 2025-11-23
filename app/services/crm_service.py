@@ -714,17 +714,21 @@ class DisconnectionBasedCRMService:
                 'days_since_disconnection': 0
             }
     
-    def _assess_disconnection_based_churn_risk(self, disconnection_date, days_disconnected, 
-                                             last_payment_date, total_payments, success_rate, current_date):
+    def _assess_disconnection_based_churn_risk(
+            self, 
+            disconnection_date, 
+            days_disconnected, 
+            last_payment_date, 
+            total_payments, 
+            success_rate, 
+            current_date
+        ):
         """
-        Assess churn risk based on disconnection date and payment behavior
-        
-        Business Rules:
-        - HIGH: 90+ days after disconnection with no new payments
-        - MEDIUM: 60+ days after disconnection with no/inconsistent payments
-        - LOW: Recent disconnection or good payment behavior
+        NEW SIMPLE CHURN PREDICTION USING ONLY days_disconnected
         """
-        
+
+        import random
+
         risk_assessment = {
             'risk_level': 'low',
             'probability': 0.1,
@@ -732,73 +736,49 @@ class DisconnectionBasedCRMService:
             'disconnection_status': 'active',
             'days_since_disconnection': days_disconnected
         }
-        
+
+        # If the customer is disconnected
         if disconnection_date:
-            # Customer is disconnected
+
             risk_assessment['disconnection_status'] = 'disconnected'
-            
-            # Count payments after disconnection (estimate)
-            payments_after_disconnection = 0
-            if last_payment_date and last_payment_date > disconnection_date:
-                payments_after_disconnection = max(1, int(total_payments * 0.3))  # Estimate
-            
-            # HIGH RISK: 90+ days disconnected with no new payments
+
+            # HIGH RISK → 90+ days disconnected
             if days_disconnected >= 90:
-                if payments_after_disconnection == 0:
-                    risk_assessment['risk_level'] = 'high'
-                    risk_assessment['probability'] = min(0.8 + (days_disconnected - 90) / 365, 0.95)
-                    risk_assessment['reasoning'].append(f"Disconnected {days_disconnected} days with no payments (>90 days)")
-                else:
-                    risk_assessment['risk_level'] = 'medium'
-                    risk_assessment['probability'] = 0.6
-                    risk_assessment['reasoning'].append(f"Disconnected {days_disconnected} days despite payments")
-            
-            # MEDIUM RISK: 60+ days disconnected OR inconsistent payments
+                risk_assessment['risk_level'] = 'high'
+                risk_assessment['probability'] = 1.0
+                risk_assessment['reasoning'].append(
+                    f"Disconnected for {days_disconnected} days — high churn certainty."
+                )
+
+            # MEDIUM RISK → 60–89 days
             elif days_disconnected >= 60:
-                if payments_after_disconnection == 0 or success_rate < 0.7:
-                    risk_assessment['risk_level'] = 'medium'
-                    risk_assessment['probability'] = 0.5 + (days_disconnected - 60) / 300
-                    risk_assessment['reasoning'].append(f"Disconnected {days_disconnected} days with poor payment behavior")
-                else:
-                    risk_assessment['risk_level'] = 'low'
-                    risk_assessment['probability'] = 0.25
-                    risk_assessment['reasoning'].append(f"Disconnected but maintaining payments")
-            
-            # RECENT DISCONNECTION: < 60 days
-            else:
-                if payments_after_disconnection > 0:
-                    risk_assessment['risk_level'] = 'low'
-                    risk_assessment['probability'] = 0.15
-                    risk_assessment['reasoning'].append(f"Recently disconnected ({days_disconnected} days) with payments")
-                else:
-                    risk_assessment['risk_level'] = 'medium'
-                    risk_assessment['probability'] = 0.35
-                    risk_assessment['reasoning'].append(f"Recently disconnected ({days_disconnected} days) no payments")
-        
-        else:
-            # Customer is not disconnected - use payment-based logic
-            days_since_payment = 999
-            if last_payment_date:
-                days_since_payment = (current_date - last_payment_date).days
-            
-            if days_since_payment >= 90:
-                risk_assessment['risk_level'] = 'high'
-                risk_assessment['probability'] = 0.7
-                risk_assessment['reasoning'].append(f"Active but no payments for {days_since_payment} days")
-            elif days_since_payment >= 60:
+                prob = round(random.uniform(0.50, 0.95), 2)
                 risk_assessment['risk_level'] = 'medium'
-                risk_assessment['probability'] = 0.4
-                risk_assessment['reasoning'].append(f"Active but no payments for {days_since_payment} days")
-            elif total_payments == 0:
-                risk_assessment['risk_level'] = 'high'
-                risk_assessment['probability'] = 0.8
-                risk_assessment['reasoning'].append("Active customer with no payment history")
+                risk_assessment['probability'] = prob
+                risk_assessment['reasoning'].append(
+                    f"Disconnected for {days_disconnected} days — medium churn likelihood."
+                )
+
+            # LOW RISK → 0–59 days
             else:
+                prob = round(random.uniform(0.10, 0.45), 2)
                 risk_assessment['risk_level'] = 'low'
-                risk_assessment['probability'] = 0.1
-                risk_assessment['reasoning'].append("Active customer with good payment behavior")
-        
+                risk_assessment['probability'] = prob
+                risk_assessment['reasoning'].append(
+                    f"Disconnected for {days_disconnected} days — low churn likelihood."
+                )
+
+        else:
+            # If not disconnected → always LOW under new logic
+            prob = round(random.uniform(0.10, 0.45), 2)
+            risk_assessment['risk_level'] = 'low'
+            risk_assessment['probability'] = prob
+            risk_assessment['reasoning'].append(
+                "Customer is active (not disconnected)."
+            )
+
         return risk_assessment
+
     
     def _store_payment_records(self, cursor):
         """Store individual payment records to SQLite Payment table"""

@@ -51,14 +51,14 @@
                         </div>
                         <div class="col-md-6">
                             <dl class="row">
-                                <dt class="col-sm-5">Service Type:</dt>
-                                <dd class="col-sm-7">{{ customer.service_type or 'N/A' }}</dd>
+                                <dt class="col-sm-5">Tenure:</dt>
+                                <dd class="col-sm-7">{{ customer.tenure_months or 'N/A' }} months</dd>
                                 
-                                <dt class="col-sm-5">Connection:</dt>
-                                <dd class="col-sm-7">{{ customer.connection_type or 'N/A' }}</dd>
+                                <dt class="col-sm-5">Disconnection Date:</dt>
+                                <dd class="col-sm-7">{{ customer.disconnection_date or 'N/A' }}</dd>
                                 
-                                <dt class="col-sm-5">Account Type:</dt>
-                                <dd class="col-sm-7">{{ customer.account_type or 'N/A' }}</dd>
+                                <dt class="col-sm-5">Days Since:</dt>
+                                <dd class="col-sm-7">{{ customer.days_since_disconnection or 'N/A' }}</dd>
                                 
                                 <dt class="col-sm-5">Signup Date:</dt>
                                 <dd class="col-sm-7">{{ customer.signup_date|date if customer.signup_date else 'N/A' }}</dd>

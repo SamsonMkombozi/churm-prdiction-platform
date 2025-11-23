@@ -28,7 +28,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-2 mb-3">
+        <!--<div class="col-md-2 mb-3">
             <div class="card border-left-success shadow h-100">
                 <div class="card-body">
                     <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
@@ -39,7 +39,7 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </div>-->
         <div class="col-md-2 mb-3">
             <div class="card border-left-danger shadow h-100">
                 <div class="card-body">
@@ -229,9 +229,9 @@
                             <th>Address</th>
                             <th>Service Plan</th>
                             <th>Tenure</th>
-                            <th>Days Since Last Payment</th>
-                            <th>Payment Consistency</th>
-                            <th>Payment Risk</th>
+                            <!--<th>Days Since Last Payment</th>-->
+                            <!--<th>Payment Consistency</th> -->
+                            <!--<th>Payment Risk</th>-->
                             <th>Churn Risk</th>
                             <th>Disconnection Date</th>
                             <th>Actions</th>
@@ -282,7 +282,7 @@
                                 {% endif %}
                             </td>
                             
-                            <!-- Days Since Last Payment -->
+                            <!-- Days Since Last Payment 
                             <td>
                                 {% if customer.days_since_last_payment is not none %}
                                     {% if customer.days_since_last_payment >= 90 %}
@@ -301,9 +301,9 @@
                                 {% else %}
                                     <span class="badge bg-secondary">No Data</span>
                                 {% endif %}
-                            </td>
+                            </td> -->
                             
-                            <!-- Payment Consistency -->
+                            <!-- Payment Consistency 
                             <td>
                                 {% if customer.payment_consistency_score %}
                                     {% set consistency = (customer.payment_consistency_score * 100)|round(1) %}
@@ -317,9 +317,9 @@
                                 {% else %}
                                     <span class="badge bg-secondary">No Data</span>
                                 {% endif %}
-                            </td>
+                            </td> -->
                             
-                            <!-- Payment Risk -->
+                            <!-- Payment Risk 
                             <td>
                                 {% if customer.churn_risk == 'high' %}
                                     <span class="badge bg-danger">
@@ -339,7 +339,7 @@
                                 {% else %}
                                     <span class="badge bg-secondary">Unknown</span>
                                 {% endif %}
-                            </td>
+                            </td>-->
                             
                             <!-- Churn Risk -->
                             <td>
@@ -397,10 +397,10 @@
                                 {% else %}
                                     <!-- No disconnection date -->
                                     <div class="disconnection-info">
-                                        <span class="badge bg-success">
+                                        <!--<span class="badge bg-success">
                                             <i class="fas fa-check-circle me-1"></i>Active
-                                        </span>
-                                        <br><small class="text-success">No disconnection</small>
+                                        </span> -->
+                                        <br><small class="text-danger">No disconnection</small>
                                     </div>
                                 {% endif %}
                             </td>
