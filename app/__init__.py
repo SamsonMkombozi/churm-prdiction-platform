@@ -1,5 +1,5 @@
 """
-Fixed Flask Application Factory
+Fixed Flask Application Factory with Database Initialization
 """
 from flask import Flask, render_template, redirect, url_for
 from flask_login import current_user
@@ -16,6 +16,7 @@ def create_app(config_name='development'):
         template_folder=os.path.join(ROOT_DIR, 'templates'),
         static_folder=os.path.join(ROOT_DIR, 'static')
     )
+    
     # Load configuration
     from app.config.settings import get_config
     config = get_config(config_name)
@@ -28,6 +29,23 @@ def create_app(config_name='development'):
     migrate.init_app(app, db)
     login_manager.init_app(app)
     csrf.init_app(app)
+    
+    # ✨ INITIALIZE DATABASE TABLES AND COLUMNS
+    # This ensures all required tables exist with proper schema
+    with app.app_context():
+        try:
+            from app.utils.database_init import initialize_database
+            app.logger.info("🚀 Initializing database schema...")
+            success = initialize_database(app)
+            if success:
+                app.logger.info("✅ Database schema initialized successfully")
+            else:
+                app.logger.warning("⚠️  Database schema initialization had issues")
+        except ImportError:
+            app.logger.warning("⚠️  Database initialization module not found - skipping")
+        except Exception as e:
+            app.logger.error(f"❌ Database initialization error: {e}")
+            # Continue anyway - tables might already exist
     
     # Configure login manager
     login_manager.login_view = 'auth.login'
@@ -79,7 +97,6 @@ def create_app(config_name='development'):
     # Template filters
     from app.utils.template_filters import register_filters
     register_filters(app)
-    
     
     # Add hasattr to Jinja2 templates
     app.jinja_env.globals['hasattr'] = hasattr

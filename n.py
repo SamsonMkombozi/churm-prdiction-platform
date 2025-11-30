@@ -1,275 +1,200 @@
 #!/usr/bin/env python3
 """
-Comprehensive PostgreSQL Configuration Debug Script
-This will find and fix the "NOT CONFIGURED" issue
+Emergency Database Fix - Diagnose and Fix Permission Issues
 """
 
+import os
 import sys
-sys.path.insert(0, '/var/www/html/churn-prediction-platform')
+import subprocess
 
-def debug_postgresql_config():
-    """Debug PostgreSQL configuration step by step"""
+def run_command(cmd):
+    """Run shell command and return output"""
+    try:
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        return result.stdout.strip(), result.returncode
+    except Exception as e:
+        return str(e), 1
+
+print("\n" + "=" * 80)
+print("🔍 DATABASE PERMISSION DIAGNOSIS")
+print("=" * 80)
+
+project = '/var/www/html/churn-prediction-platform'
+instance_dir = f'{project}/instance'
+db_file = f'{instance_dir}/churn_platform.db'
+
+print(f"\n📂 Project: {project}")
+print(f"📁 Instance: {instance_dir}")
+print(f"💾 Database: {db_file}")
+
+# 1. Check if files exist
+print("\n" + "=" * 80)
+print("1. FILE EXISTENCE CHECK")
+print("=" * 80)
+print(f"Instance directory exists: {os.path.exists(instance_dir)}")
+print(f"Database file exists: {os.path.exists(db_file)}")
+
+if os.path.exists(db_file):
+    size = os.path.getsize(db_file)
+    print(f"Database file size: {size:,} bytes")
+
+# 2. Check permissions
+print("\n" + "=" * 80)
+print("2. PERMISSION CHECK")
+print("=" * 80)
+
+if os.path.exists(instance_dir):
+    ls_output, _ = run_command(f'ls -la {instance_dir}')
+    print("Directory listing:")
+    print(ls_output)
     
-    print("=" * 80)
-    print("POSTGRESQL CONFIGURATION DEBUG")
-    print("=" * 80)
+    # Check directory permissions
+    dir_stat = os.stat(instance_dir)
+    dir_perms = oct(dir_stat.st_mode)[-3:]
+    print(f"\nDirectory permissions: {dir_perms}")
+    print(f"  Readable: {os.access(instance_dir, os.R_OK)}")
+    print(f"  Writable: {os.access(instance_dir, os.W_OK)}")
+    print(f"  Executable: {os.access(instance_dir, os.X_OK)}")
+
+if os.path.exists(db_file):
+    file_stat = os.stat(db_file)
+    file_perms = oct(file_stat.st_mode)[-3:]
+    print(f"\nDatabase file permissions: {file_perms}")
+    print(f"  Readable: {os.access(db_file, os.R_OK)}")
+    print(f"  Writable: {os.access(db_file, os.W_OK)}")
+
+# 3. Check ownership
+print("\n" + "=" * 80)
+print("3. OWNERSHIP CHECK")
+print("=" * 80)
+
+import pwd
+import grp
+
+current_user = os.getenv('USER', 'unknown')
+current_uid = os.getuid()
+current_gid = os.getgid()
+
+print(f"Current user: {current_user}")
+print(f"Current UID: {current_uid}")
+print(f"Current GID: {current_gid}")
+
+if os.path.exists(instance_dir):
+    dir_stat = os.stat(instance_dir)
+    dir_owner = pwd.getpwuid(dir_stat.st_uid).pw_name
+    dir_group = grp.getgrgid(dir_stat.st_gid).gr_name
+    print(f"\nDirectory owner: {dir_owner}:{dir_group}")
+    print(f"Directory UID: {dir_stat.st_uid}")
+    print(f"Directory GID: {dir_stat.st_gid}")
+    print(f"Ownership match: {dir_stat.st_uid == current_uid}")
+
+if os.path.exists(db_file):
+    file_stat = os.stat(db_file)
+    file_owner = pwd.getpwuid(file_stat.st_uid).pw_name
+    file_group = grp.getgrgid(file_stat.st_gid).gr_name
+    print(f"\nFile owner: {file_owner}:{file_group}")
+    print(f"File UID: {file_stat.st_uid}")
+    print(f"File GID: {file_stat.st_gid}")
+    print(f"Ownership match: {file_stat.st_uid == current_uid}")
+
+# 4. Test write access
+print("\n" + "=" * 80)
+print("4. WRITE ACCESS TEST")
+print("=" * 80)
+
+test_file = f'{instance_dir}/test_write.tmp'
+try:
+    with open(test_file, 'w') as f:
+        f.write('test')
+    os.remove(test_file)
+    print("✅ Can write to instance directory")
+except Exception as e:
+    print(f"❌ Cannot write to instance directory: {e}")
+
+# 5. Test SQLite access
+print("\n" + "=" * 80)
+print("5. SQLITE ACCESS TEST")
+print("=" * 80)
+
+try:
+    import sqlite3
+    conn = sqlite3.connect(db_file)
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tables = cursor.fetchall()
+    conn.close()
+    print(f"✅ Can open database with sqlite3")
+    print(f"   Found {len(tables)} tables: {[t[0] for t in tables[:5]]}")
+except Exception as e:
+    print(f"❌ Cannot open database with sqlite3: {e}")
+
+# 6. Check for file locks
+print("\n" + "=" * 80)
+print("6. FILE LOCK CHECK")
+print("=" * 80)
+
+lsof_output, _ = run_command(f'lsof {db_file} 2>/dev/null')
+if lsof_output:
+    print("Processes using the database:")
+    print(lsof_output)
+else:
+    print("✅ No processes currently have the database file open")
+
+# 7. PROPOSED FIX
+print("\n" + "=" * 80)
+print("7. PROPOSED FIX")
+print("=" * 80)
+
+fixes_needed = []
+
+if os.path.exists(instance_dir):
+    dir_stat = os.stat(instance_dir)
+    if dir_stat.st_uid != current_uid:
+        fixes_needed.append(f"sudo chown {current_user}:{current_user} {instance_dir}")
+    
+    dir_perms = oct(dir_stat.st_mode)[-3:]
+    if dir_perms != '755':
+        fixes_needed.append(f"chmod 755 {instance_dir}")
+
+if os.path.exists(db_file):
+    file_stat = os.stat(db_file)
+    if file_stat.st_uid != current_uid:
+        fixes_needed.append(f"sudo chown {current_user}:{current_user} {db_file}")
+    
+    file_perms = oct(file_stat.st_mode)[-3:]
+    if file_perms not in ['664', '644']:
+        fixes_needed.append(f"chmod 664 {db_file}")
+
+if fixes_needed:
+    print("⚠️  Issues found! Run these commands to fix:")
     print()
-    
-    # Step 1: Check database connection
-    print("Step 1: Checking SQLite database connection...")
-    try:
-        from app import create_app
-        app = create_app()
-        print("✓ Flask app created successfully")
-    except Exception as e:
-        print(f"✗ Failed to create Flask app: {e}")
-        return False
-    
-    with app.app_context():
-        try:
-            from app.extensions import db
-            from app.models.company import Company
-            print("✓ Imports successful")
-        except Exception as e:
-            print(f"✗ Import error: {e}")
-            return False
-        
-        # Step 2: Check Company table
-        print("\nStep 2: Checking Company table...")
-        try:
-            companies = Company.query.all()
-            print(f"✓ Found {len(companies)} company(ies)")
-            
-            if not companies:
-                print("✗ No companies in database!")
-                return False
-            
-            company = companies[0]
-            print(f"  Working with: {company.name} (ID: {company.id})")
-            
-        except Exception as e:
-            print(f"✗ Error querying companies: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
-        
-        # Step 3: Check PostgreSQL fields in database
-        print("\nStep 3: Checking PostgreSQL fields in database...")
-        try:
-            import sqlite3
-            conn = sqlite3.connect('instance/churn_platform.db')
-            cursor = conn.cursor()
-            
-            # Get actual column names
-            cursor.execute("PRAGMA table_info(companies)")
-            columns = cursor.fetchall()
-            column_names = [col[1] for col in columns]
-            
-            print("  Available columns in companies table:")
-            pg_related = [c for c in column_names if 'postgresql' in c.lower() or 'postgres' in c.lower()]
-            for col in pg_related:
-                print(f"    - {col}")
-            
-            # Get actual values
-            cursor.execute(f"""
-                SELECT id, name, postgresql_host, postgresql_port, 
-                       postgresql_database, postgresql_username, 
-                       postgresql_password_encrypted
-                FROM companies WHERE id = {company.id}
-            """)
-            
-            result = cursor.fetchone()
-            if result:
-                print("\n  PostgreSQL credentials in database:")
-                print(f"    Host: {result[2]}")
-                print(f"    Port: {result[3]}")
-                print(f"    Database: {result[4]}")
-                print(f"    Username: {result[5]}")
-                print(f"    Password: {'***' if result[6] else 'NOT SET'}")
-            
-            cursor.close()
-            conn.close()
-            
-        except Exception as e:
-            print(f"✗ Error checking database: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        # Step 4: Check Company model attributes
-        print("\nStep 4: Checking Company model attributes...")
-        try:
-            print(f"  postgresql_host: {getattr(company, 'postgresql_host', 'MISSING')}")
-            print(f"  postgresql_port: {getattr(company, 'postgresql_port', 'MISSING')}")
-            print(f"  postgresql_database: {getattr(company, 'postgresql_database', 'MISSING')}")
-            print(f"  postgresql_username: {getattr(company, 'postgresql_username', 'MISSING')}")
-            print(f"  postgresql_password_encrypted: {'***' if getattr(company, 'postgresql_password_encrypted', None) else 'MISSING'}")
-        except Exception as e:
-            print(f"✗ Error accessing attributes: {e}")
-        
-        # Step 5: Check has_postgresql_config method
-        print("\nStep 5: Checking has_postgresql_config() method...")
-        try:
-            if hasattr(company, 'has_postgresql_config'):
-                result = company.has_postgresql_config()
-                print(f"  has_postgresql_config() returns: {result}")
-                
-                # Debug the method
-                if not result:
-                    print("\n  Debugging why it returns False:")
-                    host = company.postgresql_host
-                    database = company.postgresql_database
-                    username = company.postgresql_username
-                    password = company.postgresql_password_encrypted
-                    
-                    print(f"    host: {repr(host)} -> bool: {bool(host and host.strip())}")
-                    print(f"    database: {repr(database)} -> bool: {bool(database and database.strip())}")
-                    print(f"    username: {repr(username)} -> bool: {bool(username and username.strip())}")
-                    print(f"    password: {repr(password)} -> bool: {bool(password and password.strip())}")
-            else:
-                print("  ✗ has_postgresql_config() method not found!")
-                
-        except Exception as e:
-            print(f"✗ Error checking has_postgresql_config: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        # Step 6: Check get_postgresql_config method
-        print("\nStep 6: Checking get_postgresql_config() method...")
-        try:
-            if hasattr(company, 'get_postgresql_config'):
-                config = company.get_postgresql_config()
-                print(f"  get_postgresql_config() returns:")
-                for key, value in config.items():
-                    if 'password' in key.lower():
-                        print(f"    {key}: {'***' if value else 'None'}")
-                    else:
-                        print(f"    {key}: {value}")
-            else:
-                print("  ✗ get_postgresql_config() method not found!")
-                
-        except Exception as e:
-            print(f"✗ Error checking get_postgresql_config: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        # Step 7: Check CRM service
-        print("\nStep 7: Checking CRM service...")
-        try:
-            # Import the actual service being used
-            try:
-                from app.services.crm_service import DisconnectionBasedCRMService
-                service_class = DisconnectionBasedCRMService
-                print("  Using: DisconnectionBasedCRMService")
-            except ImportError:
-                try:
-                    from app.services.crm_service import EnhancedCRMService
-                    service_class = EnhancedCRMService
-                    print("  Using: EnhancedCRMService")
-                except ImportError:
-                    from app.services.crm_service import CRMService
-                    service_class = CRMService
-                    print("  Using: CRMService")
-            
-            # Create service instance
-            crm_service = service_class(company)
-            print("  ✓ CRM service instance created")
-            
-            # Check get_connection_info
-            connection_info = crm_service.get_connection_info()
-            print(f"\n  get_connection_info() returns:")
-            print(f"    postgresql_configured: {connection_info.get('postgresql_configured')}")
-            print(f"    api_configured: {connection_info.get('api_configured')}")
-            print(f"    preferred_method: {connection_info.get('preferred_method')}")
-            
-            if not connection_info.get('postgresql_configured'):
-                print("\n  ✗ CRM service says PostgreSQL is NOT configured!")
-                print("  This is the problem!")
-                
-        except Exception as e:
-            print(f"✗ Error checking CRM service: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        # Step 8: Test PostgreSQL connection
-        print("\nStep 8: Testing actual PostgreSQL connection...")
-        try:
-            import psycopg2
-            
-            config = company.get_postgresql_config()
-            
-            print(f"  Attempting connection to:")
-            print(f"    Host: {config['host']}")
-            print(f"    Port: {config['port']}")
-            print(f"    Database: {config['database']}")
-            print(f"    Username: {config['username']}")
-            
-            conn = psycopg2.connect(
-                host=config['host'],
-                port=config['port'],
-                dbname=config['database'],
-                user=config['username'],
-                password=config['password'],
-                connect_timeout=5
-            )
-            
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM crm_customers")
-            count = cursor.fetchone()[0]
-            
-            print(f"  ✓ Connection successful!")
-            print(f"  ✓ Found {count:,} customers in CRM database")
-            
-            cursor.close()
-            conn.close()
-            
-        except Exception as e:
-            print(f"  ✗ Connection failed: {e}")
-        
-        print("\n" + "=" * 80)
-        print("DIAGNOSIS COMPLETE")
-        print("=" * 80)
-        
-        # Provide fix recommendations
-        print("\nRECOMMENDATIONS:")
-        
-        if not company.has_postgresql_config():
-            print("\n1. PostgreSQL credentials are missing or invalid")
-            print("   Run this to set them:")
-            print("""
-   python3 << 'EOF'
-   import sys
-   sys.path.insert(0, '/var/www/html/churn-prediction-platform')
-   from app import create_app
-   from app.extensions import db
-   from app.models.company import Company
-   
-   app = create_app()
-   with app.app_context():
-       company = Company.query.first()
-       company.postgresql_host = '196.250.208.220'
-       company.postgresql_port = 5432
-       company.postgresql_database = 'AnalyticsWH'
-       company.postgresql_username = 'analytics'
-       company.postgresql_password_encrypted = 'NhKh4Cpcdh'
-       db.session.commit()
-       print("✓ Credentials updated!")
-   EOF
-            """)
-        else:
-            print("\n✓ PostgreSQL credentials look good!")
-            print("  If you're still getting errors, check:")
-            print("  1. The CRM service is using the right method")
-            print("  2. Restart Flask after making changes")
+    for fix in fixes_needed:
+        print(f"   {fix}")
+    print()
+    print("Or run this one-liner:")
+    print(f"   sudo chown -R {current_user}:{current_user} {instance_dir} && chmod 755 {instance_dir} && chmod 664 {db_file}")
+else:
+    print("✅ No obvious permission issues found")
+    print()
+    print("The issue might be:")
+    print("  1. SELinux/AppArmor restrictions")
+    print("  2. Disk full (check with: df -h)")
+    print("  3. Inode exhaustion (check with: df -i)")
+    print("  4. Database corruption")
 
+# 8. Additional checks
+print("\n" + "=" * 80)
+print("8. SYSTEM CHECKS")
+print("=" * 80)
 
-if __name__ == "__main__":
-    try:
-        debug_postgresql_config()
-    except KeyboardInterrupt:
-        print("\n\nCancelled by user")
-        sys.exit(1)
-    except Exception as e:
-        print(f"\n✗ Unexpected error: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+# Check disk space
+df_output, _ = run_command('df -h /var/www/html/churn-prediction-platform')
+print("Disk space:")
+print(df_output)
+
+# Check inodes
+df_i_output, _ = run_command('df -i /var/www/html/churn-prediction-platform')
+print("\nInode usage:")
+print(df_i_output)
+
+print("\n" + "=" * 80)
